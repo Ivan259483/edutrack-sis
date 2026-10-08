@@ -1,14 +1,16 @@
 import { useState, useContext, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { AuthContext } from '../context/auth-context';
 import { FaGraduationCap, FaShieldAlt, FaEye, FaEyeSlash, FaBolt, FaLock } from 'react-icons/fa';
 
 const LoginPage = () => {
   const navigate = useNavigate();
   const { user, login } = useContext(AuthContext);
+  // The admin portal sends signed-out administrators here as /login?role=admin.
+  const [searchParams] = useSearchParams();
 
   // Form State: 'student' or 'admin'
-  const [role, setRole] = useState('student');
+  const [role, setRole] = useState(searchParams.get('role') === 'admin' ? 'admin' : 'student');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);

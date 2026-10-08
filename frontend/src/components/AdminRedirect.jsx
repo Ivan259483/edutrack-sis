@@ -1,16 +1,18 @@
 import { useContext, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/auth-context';
-import { ADMIN_PORTAL_URL } from '../services/api';
 import { openAdminPortal } from '../services/session';
 
-// Sends administrators to the admin portal (with their session, if signed in here).
+// Sends administrators to the admin portal (with their session, if signed in
+// here); everyone else to this login page's Administrator tab.
 const AdminRedirect = () => {
   const { user, token } = useContext(AuthContext);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (user?.role === 'admin' && token) openAdminPortal(token);
-    else window.location.assign(`${ADMIN_PORTAL_URL}/login`);
-  }, [user, token]);
+    else navigate('/login?role=admin', { replace: true });
+  }, [user, token, navigate]);
 
   return (
     <div className="d-flex justify-content-center align-items-center min-vh-100 bg-dark text-light gap-2">
