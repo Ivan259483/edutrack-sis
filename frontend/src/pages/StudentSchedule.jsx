@@ -2,7 +2,7 @@ import React, { useState, useContext } from 'react';
 import AppLayout from '../components/layout/AppLayout';
 import { LoadError, Loading } from '../components/PageState';
 import useApi from '../services/useApi';
-import { DAYS, formatTime } from '../services/academic';
+import { DAYS, DEPARTMENTS, formatTime } from '../services/academic';
 import { AuthContext } from '../context/auth-context';
 import {
   FaCalendarAlt,
@@ -56,6 +56,16 @@ const StudentSchedule = () => {
     return h + m / 60;
   };
 
+  // Weekly totals and overlaps, from the individual class meetings.
+  const weeklyHours = schedule.data.reduce((sum, c) => sum + toHours(c.endTime) - toHours(c.startTime), 0);
+  const classDays = new Set(schedule.data.map((c) => c.day)).size;
+  // Same rule the API uses when saving schedules: same day and overlapping times.
+  const conflicts = schedule.data.filter((a, i) =>
+    schedule.data.some(
+      (b, j) => j > i && a.day === b.day && toHours(a.startTime) < toHours(b.endTime) && toHours(b.startTime) < toHours(a.endTime)
+    )
+  ).length;
+
   // One entry per class meeting pattern; the same class on several days is merged.
   const scheduleData = Object.values(
     schedule.data.reduce((groups, c) => {
@@ -74,7 +84,6 @@ const StudentSchedule = () => {
         title: c.subjectTitle,
         units: units[c.subjectCode] || 3,
         section: c.section,
-        type: /lab/i.test(c.room) ? 'Laboratory' : 'Lecture',
         room: c.room,
         instructor: c.instructor,
         instructorEmail: 'Contact via Help and Support',
@@ -202,9 +211,9 @@ const StudentSchedule = () => {
                   <FaClock />
                 </span>
               </div>
-              <h3 className="fw-bold mb-1">18.0 Hrs</h3>
-              <span className="text-success small fw-medium" style={{ fontSize: '12px' }}>
-                Balanced 5-day workload
+              <h3 className="fw-bold mb-1">{weeklyHours.toFixed(1)} Hrs</h3>
+              <span className="text-secondary small fw-medium" style={{ fontSize: '12px' }}>
+                Across {classDays} day(s)
               </span>
             </div>
           </div>
@@ -220,9 +229,11 @@ const StudentSchedule = () => {
                   <FaCheckCircle />
                 </span>
               </div>
-              <h3 className="fw-bold mb-1 text-success fs-4">Conflict-Free</h3>
+              <h3 className={`fw-bold mb-1 fs-4 ${conflicts ? 'text-danger' : 'text-success'}`}>
+                {conflicts ? `${conflicts} Conflict(s)` : 'Conflict-Free'}
+              </h3>
               <span className="text-secondary small" style={{ fontSize: '12px' }}>
-                Officially validated by Registrar
+                {conflicts ? 'Overlapping class times found' : 'No overlapping class times'}
               </span>
             </div>
           </div>
@@ -240,7 +251,7 @@ const StudentSchedule = () => {
               </div>
               <h3 className="fw-bold mb-1 text-primary fs-4">{user?.profile?.section || schedule.data[0]?.section || '—'}</h3>
               <span className="text-secondary small" style={{ fontSize: '12px' }}>
-                College of Computer Studies
+                {DEPARTMENTS[user?.profile?.program] || ''}
               </span>
             </div>
           </div>
@@ -351,12 +362,6 @@ const StudentSchedule = () => {
                         >
                           <div className="d-flex justify-content-between align-items-center mb-1">
                             <span className="fw-bold small text-white">{cls.code}</span>
-                            <span
-                              className="badge rounded-pill text-white"
-                              style={{ backgroundColor: cls.border, fontSize: '9px', padding: '2px 6px' }}
-                            >
-                              {cls.type}
-                            </span>
                           </div>
                           <div
                             className="text-light fw-medium small text-truncate"
@@ -446,12 +451,6 @@ const StudentSchedule = () => {
                           </div>
                         </td>
                         <td className="py-3">
-                          <span
-                            className="badge rounded-pill me-1"
-                            style={{ backgroundColor: `${item.color}33`, color: item.color }}
-                          >
-                            {item.type}
-                          </span>
                           <span className="badge bg-secondary bg-opacity-25 text-light">
                             {item.section}
                           </span>
@@ -525,7 +524,7 @@ const StudentSchedule = () => {
                         border: `1px solid ${selectedClassModal.border}`,
                       }}
                     >
-                      {selectedClassModal.code} • {selectedClassModal.type}
+                      {selectedClassModal.code}
                     </span>
                     <h5 className="modal-title fw-bold text-white mb-0">
                       {selectedClassModal.title}

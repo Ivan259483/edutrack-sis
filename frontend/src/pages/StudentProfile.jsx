@@ -236,9 +236,9 @@ const StudentProfile = () => {
                 <span className="fw-semibold text-dark">{profile.yearLevel} - {profile.section}</span>
               </div>
               <div className="d-flex justify-content-between py-1">
-                <span className="text-muted">Academic Standing</span>
-                <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2 py-1 rounded-pill">
-                  Good Standing (Regular)
+                <span className="text-muted">Academic Status</span>
+                <span className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 px-2 py-1 rounded-pill">
+                  {profile.academicStatus}
                 </span>
               </div>
             </div>

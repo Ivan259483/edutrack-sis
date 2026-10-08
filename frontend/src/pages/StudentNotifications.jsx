@@ -244,7 +244,7 @@ const StudentNotifications = () => {
               </div>
               <h3 className="fw-bold mb-1">{totalCount} Notices</h3>
               <span className="text-secondary small" style={{ fontSize: '12px' }}>
-                Academic Year 2026–2027
+                {enrollment.data?.period ? `Academic Year ${enrollment.data.period.academicYear}` : ''}
               </span>
             </div>
           </div>

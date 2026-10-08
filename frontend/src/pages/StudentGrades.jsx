@@ -3,7 +3,7 @@ import { AuthContext } from '../context/auth-context';
 import AppLayout from '../components/layout/AppLayout';
 import { LoadError, Loading } from '../components/PageState';
 import useApi from '../services/useApi';
-import { formatGrade, gradeSummary } from '../services/academic';
+import { formatGrade, gradeSummary, programName } from '../services/academic';
 import {
   FaAward,
   FaBook,
@@ -53,6 +53,15 @@ const StudentGrades = () => {
   const summary = gradeSummary(grades.data.filter((g) => termOf(g) === selectedTerm));
   const totalUnits = summary.units;
   const calculatedGPA = formatGrade(summary.gpa);
+  const notPassed = gradesData.filter((g) => g.remark !== 'Passed').length;
+  const passSummary = !gradesData.length
+    ? { text: '', className: '' }
+    : notPassed
+      ? { text: `● ${notPassed} subject(s) not passed`, className: 'text-danger' }
+      : { text: '● All Subjects Passed', className: 'text-success' };
+  const profile = user?.profile;
+  const remarkBadge = (remark) =>
+    remark === 'Passed' ? 'bg-success text-success border-success' : 'bg-danger text-danger border-danger';
 
   return (
     <AppLayout title="My Grades">
@@ -104,8 +113,8 @@ const StudentGrades = () => {
                 Term GPA
               </span>
               <h3 className="fw-bold text-dark mb-0">{calculatedGPA}</h3>
-              <span className="text-success small" style={{ fontSize: '11px' }}>
-                Dean's List Eligible
+              <span className="text-muted small" style={{ fontSize: '11px' }}>
+                Weighted by units
               </span>
             </div>
           </div>
@@ -143,11 +152,11 @@ const StudentGrades = () => {
             </div>
             <div>
               <span className="text-muted small d-block" style={{ fontSize: '12px' }}>
-                Academic Standing
+                Academic Status
               </span>
-              <h4 className="fw-bold text-dark mb-0">Good Standing</h4>
-              <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2 py-0 rounded-pill small mt-1">
-                Regular Status
+              <h4 className="fw-bold text-dark mb-0">{profile?.academicStatus || '—'}</h4>
+              <span className="text-muted small" style={{ fontSize: '11px' }}>
+                {profile ? `${profile.yearLevel} • ${profile.section}` : ''}
               </span>
             </div>
           </div>
@@ -204,8 +213,8 @@ const StudentGrades = () => {
                     <strong className="text-primary fs-6">{item.grade}</strong>
                   </td>
                   <td className="text-center">
-                    <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-3 py-1 rounded-pill">
-                      <FaCheckCircle style={{ fontSize: '10px' }} /> {item.remark}
+                    <span className={`badge bg-opacity-10 border border-opacity-25 px-3 py-1 rounded-pill ${remarkBadge(item.remark)}`}>
+                      {item.remark === 'Passed' && <FaCheckCircle style={{ fontSize: '10px' }} />} {item.remark}
                     </span>
                   </td>
                   <td className="text-muted" style={{ fontSize: '12px' }}>
@@ -231,8 +240,8 @@ const StudentGrades = () => {
                 <td className="text-center fw-bold">{totalUnits} Units</td>
                 <td colSpan="2" />
                 <td className="text-center fw-bold text-primary fs-6">{calculatedGPA}</td>
-                <td colSpan="3" className="text-success fw-medium small">
-                  ● All Subjects Passed
+                <td colSpan="3" className={`fw-medium small ${passSummary.className}`}>
+                  {passSummary.text}
                 </td>
               </tr>
             </tfoot>
@@ -356,19 +365,21 @@ const StudentGrades = () => {
                   </div>
                   <div className="col-sm-6">
                     <span className="text-muted">Degree Program:</span>{' '}
-                    <strong className="text-dark">BS Information Technology (BSIT)</strong>
+                    <strong className="text-dark">
+                      {profile ? `${programName(profile.program)} (${profile.program})` : '—'}
+                    </strong>
                   </div>
                   <div className="col-sm-6">
                     <span className="text-muted">Year & Section:</span>{' '}
-                    <strong className="text-dark">3rd Year • BSIT 3-A</strong>
+                    <strong className="text-dark">{profile ? `${profile.yearLevel} • ${profile.section}` : '—'}</strong>
                   </div>
                   <div className="col-sm-6">
                     <span className="text-muted">Academic Term:</span>{' '}
                     <strong className="text-dark">{selectedTerm}</strong>
                   </div>
                   <div className="col-sm-6">
-                    <span className="text-muted">Academic Standing:</span>{' '}
-                    <span className="badge bg-success">GOOD STANDING</span>
+                    <span className="text-muted">Academic Status:</span>{' '}
+                    <span className="badge bg-secondary">{profile?.academicStatus || '—'}</span>
                   </div>
                 </div>
 
@@ -392,7 +403,7 @@ const StudentGrades = () => {
                           <td className="text-center">{item.units}</td>
                           <td className="text-center fw-bold">{item.grade}</td>
                           <td className="text-center">
-                            <span className="text-success fw-semibold">{item.remark}</span>
+                            <span className={`fw-semibold ${item.remark === 'Passed' ? 'text-success' : 'text-danger'}`}>{item.remark}</span>
                           </td>
                           <td>{item.instructor}</td>
                         </tr>
@@ -405,8 +416,8 @@ const StudentGrades = () => {
                         </td>
                         <td className="text-center fw-bold text-dark">{totalUnits}</td>
                         <td className="text-center fw-bold text-primary fs-6">{calculatedGPA}</td>
-                        <td colSpan="2" className="text-success small fw-medium">
-                          Dean's Honor List Recognition
+                        <td colSpan="2" className={`small fw-medium ${passSummary.className}`}>
+                          {passSummary.text}
                         </td>
                       </tr>
                     </tfoot>
@@ -421,9 +432,7 @@ const StudentGrades = () => {
                     <span>Student's Signature</span>
                   </div>
                   <div>
-                    <div className="fw-bold text-dark border-bottom pb-1" style={{ width: '180px' }}>
-                      Dr. Maria Santos
-                    </div>
+                    <div className="border-bottom pb-1" style={{ width: '180px', height: '1.6em' }} />
                     <span>University Registrar</span>
                   </div>
                 </div>

@@ -687,9 +687,7 @@ const StudentEnrollment = () => {
                           Total Academic Units:
                         </td>
                         <td className="text-center fw-bold text-primary">{totalUnits}</td>
-                        <td colSpan="3" className="text-muted small">
-                          Tuition Assessment: Free Higher Education (RA 10931) • Fully Subsidized
-                        </td>
+                        <td colSpan="3" />
                       </tr>
                     </tfoot>
                   </table>
@@ -704,9 +702,7 @@ const StudentEnrollment = () => {
                     <span>Student's Signature</span>
                   </div>
                   <div>
-                    <div className="fw-bold text-dark border-bottom pb-1" style={{ width: '180px' }}>
-                      Dr. Maria Santos
-                    </div>
+                    <div className="border-bottom pb-1" style={{ width: '180px', height: '1.6em' }} />
                     <span>University Registrar</span>
                   </div>
                 </div>

@@ -14,8 +14,6 @@ import {
   FaArrowRight,
 } from 'react-icons/fa';
 
-const TOTAL_UNITS = 144; // units required to graduate
-
 const StatCard = ({ icon, color, background, label, value }) => (
   <div className="col-sm-6 col-lg-3">
     <div className="card border-0 shadow-sm rounded-4 p-3 bg-white h-100 d-flex flex-row align-items-center gap-3">
@@ -63,9 +61,7 @@ const StudentDashboard = () => {
   const today = todayName();
   const todaysClasses = schedule.data.filter((c) => c.day === today);
   const recentGrades = grades.data.slice(0, 4);
-  const progress = Math.min(100, Math.round((summary.earned / TOTAL_UNITS) * 100));
-  const standing =
-    summary.gpa === null ? 'No grades yet' : summary.gpa <= 1.75 ? "Dean's List" : summary.gpa <= 3 ? 'Good Standing' : 'Probation';
+  const subjectsPassed = grades.data.filter((g) => g.remark === 'Passed').length;
 
   return (
     <AppLayout title="Dashboard">
@@ -91,7 +87,7 @@ const StudentDashboard = () => {
       {/* 2. KPI cards */}
       <div className="row g-3 mb-4">
         <StatCard icon={<FaChartLine />} color="#2563eb" background="#eff6ff" label="GPA" value={formatGrade(summary.gpa)} />
-        <StatCard icon={<FaBook />} color="#16a34a" background="#f0fdf4" label="Completed Units" value={`${summary.earned}/${TOTAL_UNITS}`} />
+        <StatCard icon={<FaBook />} color="#16a34a" background="#f0fdf4" label="Units Earned" value={summary.earned} />
         <StatCard
           icon={<FaGraduationCap />}
           color="#8b5cf6"
@@ -99,7 +95,7 @@ const StudentDashboard = () => {
           label="Enrolled Subjects"
           value={current?.status === 'Approved' ? current.subjects.length : 0}
         />
-        <StatCard icon={<FaAward />} color="#d97706" background="#fffbeb" label="Standing" value={<span className="fs-6">{standing}</span>} />
+        <StatCard icon={<FaAward />} color="#d97706" background="#fffbeb" label="Academic Status" value={<span className="fs-6">{student.academicStatus}</span>} />
       </div>
 
       {/* 3. Academic progress & student information */}
@@ -108,18 +104,7 @@ const StudentDashboard = () => {
           <div className="card border-0 shadow-sm rounded-4 p-4 bg-white h-100">
             <div className="mb-3">
               <h6 className="fw-bold text-dark mb-1">Academic Progress</h6>
-              <span className="text-muted small">Your journey toward graduation</span>
-            </div>
-            <div className="mb-4">
-              <div className="d-flex justify-content-between text-muted small mb-1" style={{ fontSize: '11px' }}>
-                <span>Units Completed</span>
-                <span className="fw-semibold">
-                  {summary.earned} / {TOTAL_UNITS}
-                </span>
-              </div>
-              <div className="progress" style={{ height: '7px' }}>
-                <div className="progress-bar bg-primary" role="progressbar" style={{ width: `${progress}%` }} aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} />
-              </div>
+              <span className="text-muted small">Based on your published grades</span>
             </div>
             <div className="row text-center py-2 mb-3">
               <div className="col-4 border-end">
@@ -131,8 +116,8 @@ const StudentDashboard = () => {
                 <span className="text-muted small" style={{ fontSize: '11px' }}>Units Earned</span>
               </div>
               <div className="col-4">
-                <h3 className="fw-bold text-dark mb-0">{Math.max(0, TOTAL_UNITS - summary.earned)}</h3>
-                <span className="text-muted small" style={{ fontSize: '11px' }}>Units Remaining</span>
+                <h3 className="fw-bold text-dark mb-0">{subjectsPassed}</h3>
+                <span className="text-muted small" style={{ fontSize: '11px' }}>Subjects Passed</span>
               </div>
             </div>
             <div className="pt-3 border-top d-flex justify-content-between align-items-center">
