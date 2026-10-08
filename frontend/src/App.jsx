@@ -13,6 +13,7 @@ import StudentSchedule from './pages/StudentSchedule';
 import StudentNotifications from './pages/StudentNotifications';
 import StudentSupport from './pages/StudentSupport';
 import AdminRedirect from './components/AdminRedirect';
+import NotFoundPage from './pages/NotFoundPage';
 
 function App() {
   return (
@@ -86,7 +87,8 @@ function App() {
           {/* Administrators use the separate admin portal */}
           <Route path="/admin/*" element={<AdminRedirect />} />
 
-          <Route path="*" element={<Navigate to="/login" replace />} />
+          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </Router>
     </AuthProvider>
