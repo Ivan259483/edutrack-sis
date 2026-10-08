@@ -132,10 +132,11 @@ const LoginPage = () => {
             <form onSubmit={handleSubmit}>
               {/* Email Input (No Student ID) */}
               <div className="mb-3">
-                <label className="form-label text-light small fw-medium">
+                <label className="form-label text-light small fw-medium" htmlFor="login-identifier">
                   {role === 'student' ? 'Student Email or Student ID' : 'Administrator Email'}
                 </label>
                 <input
+                  id="login-identifier"
                   type={role === 'student' ? 'text' : 'email'}
                   autoComplete="username"
                   className="form-control bg-dark border-secondary text-white py-2"
@@ -148,10 +149,12 @@ const LoginPage = () => {
 
               {/* Password Input */}
               <div className="mb-3">
-                <label className="form-label text-light small fw-medium">Password</label>
+                <label className="form-label text-light small fw-medium" htmlFor="login-password">Password</label>
                 <div className="input-group">
                   <input
+                    id="login-password"
                     type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
                     className="form-control bg-dark border-secondary text-white py-2"
                     placeholder="Enter password"
                     value={password}
@@ -160,10 +163,14 @@ const LoginPage = () => {
                   />
                   <button
                     type="button"
-                    className="btn btn-outline-secondary border-secondary text-secondary"
+                    className="btn btn-outline-light border-secondary d-flex align-items-center"
+                    style={{ color: '#cbd5e1' }}
                     onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    aria-pressed={showPassword}
+                    title={showPassword ? 'Hide password' : 'Show password'}
                   >
-                    {showPassword ? <FaEyeSlash /> : <FaEye />}
+                    {showPassword ? <FaEyeSlash size={16} aria-hidden="true" /> : <FaEye size={16} aria-hidden="true" />}
                   </button>
                 </div>
               </div>
