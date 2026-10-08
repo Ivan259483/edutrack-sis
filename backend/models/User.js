@@ -14,10 +14,10 @@ const userSchema = new mongoose.Schema(
       unique: true,
       lowercase: true,
       trim: true,
-      match: [
-        /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/,
-        'Please add a valid email',
-      ],
+      // Last line of defence only; routes validate with express-validator isEmail().
+      // Accepts any domain ending (.info, .education, ...) and has no nested
+      // quantifiers, so it can't backtrack catastrophically.
+      match: [/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/, 'Please add a valid email'],
     },
     password: {
       type: String,

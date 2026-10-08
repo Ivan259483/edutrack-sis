@@ -40,7 +40,7 @@ const RegisterPage = () => {
   }, [resendCooldown]);
 
   // Real-time Validation Rules
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
   const isFirstNameValid = formData.firstName.trim().length >= 2;
   const isLastNameValid = formData.lastName.trim().length >= 2;
   const isEmailValid = emailRegex.test(formData.email.trim());
