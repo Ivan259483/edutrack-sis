@@ -72,6 +72,14 @@ src/
                           Schedule, Notifications, Help & Support, 404
 ```
 
+## Sign-in
+
+This login page (Student / Administrator tabs) is the only sign-in screen for both portals.
+Administrators are handed over to the Admin Portal after signing in; the Admin Portal sends
+signed-out visitors and **Sign out** back to `/login?role=admin`, which opens the Administrator
+tab. The **Quick Demo Fill** buttons appear only in development (`npm run dev`); production
+builds don't include them or the demo passwords.
+
 ## Notes
 
 - "Forgot password" is a placeholder page; no reset email is sent.

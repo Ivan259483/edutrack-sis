@@ -3,6 +3,15 @@ import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { AuthContext } from '../context/auth-context';
 import { FaGraduationCap, FaShieldAlt, FaEye, FaEyeSlash, FaBolt, FaLock } from 'react-icons/fa';
 
+// Seeded demo accounts for the local demo only. Vite turns this into `null` in
+// production builds, so the passwords are not shipped.
+const DEMO_ACCOUNTS = import.meta.env.DEV
+  ? {
+      student: { identifier: 'juan.delacruz@edutrack.edu', password: 'Student123!' },
+      admin: { identifier: 'admin@edutrack.edu', password: 'Admin123!' },
+    }
+  : null;
+
 const LoginPage = () => {
   const navigate = useNavigate();
   const { user, login } = useContext(AuthContext);
@@ -44,18 +53,11 @@ const LoginPage = () => {
     // Administrators are being redirected to the admin portal.
   };
 
-  // Quick Demo Buttons (Email Only)
-  const handleFillDemoStudent = () => {
-    setRole('student');
-    setEmail('juan.delacruz@edutrack.edu');
-    setPassword('Student123!');
-    setError('');
-  };
-
-  const handleFillDemoAdmin = () => {
-    setRole('admin');
-    setEmail('admin@edutrack.edu');
-    setPassword('Admin123!');
+  // Quick Demo Buttons (development only)
+  const fillDemo = (demoRole) => {
+    setRole(demoRole);
+    setEmail(DEMO_ACCOUNTS[demoRole].identifier);
+    setPassword(DEMO_ACCOUNTS[demoRole].password);
     setError('');
   };
 
@@ -223,7 +225,8 @@ const LoginPage = () => {
               </div>
             )}
 
-            {/* Quick Demo Helper Section */}
+            {/* Quick Demo Helper Section (development only) */}
+            {DEMO_ACCOUNTS && (
             <div
               className="p-3 rounded-3 mt-4 border border-secondary border-opacity-25"
               style={{ backgroundColor: '#0f172a' }}
@@ -235,19 +238,20 @@ const LoginPage = () => {
                 <button
                   type="button"
                   className="btn btn-sm btn-outline-light flex-fill py-1 small d-flex align-items-center justify-content-center gap-1"
-                  onClick={handleFillDemoStudent}
+                  onClick={() => fillDemo('student')}
                 >
                   <FaGraduationCap /> Demo Student
                 </button>
                 <button
                   type="button"
                   className="btn btn-sm btn-outline-light flex-fill py-1 small d-flex align-items-center justify-content-center gap-1"
-                  onClick={handleFillDemoAdmin}
+                  onClick={() => fillDemo('admin')}
                 >
                   <FaShieldAlt /> Demo Admin
                 </button>
               </div>
             </div>
+            )}
           </div>
         </div>
       </div>
