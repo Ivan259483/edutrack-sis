@@ -12,7 +12,8 @@ import {
   FaSignOutAlt,
 } from 'react-icons/fa';
 
-const Sidebar = () => {
+// onNavigate/onClose are passed when the sidebar is shown in the mobile drawer.
+const Sidebar = ({ onNavigate, onClose }) => {
   const { user, logout } = useContext(AuthContext);
 
   // Student portal navigation (administrators use the separate admin portal)
@@ -28,7 +29,7 @@ const Sidebar = () => {
 
   return (
     <aside
-      className="d-flex flex-column flex-shrink-0 text-white min-vh-100"
+      className={`d-flex flex-column flex-shrink-0 text-white ${onClose ? 'h-100' : 'min-vh-100'}`}
       style={{
         width: '260px',
         backgroundColor: '#0f172a', // Deep slate from your prototype
@@ -49,6 +50,14 @@ const Sidebar = () => {
             Student Portal
           </span>
         </div>
+        {onClose && (
+          <button
+            type="button"
+            className="btn-close btn-close-white ms-auto"
+            aria-label="Close navigation menu"
+            onClick={onClose}
+          />
+        )}
       </div>
 
       {/* Navigation Menu */}
@@ -58,6 +67,7 @@ const Sidebar = () => {
             <li className="nav-item" key={item.path}>
               <NavLink
                 to={item.path}
+                onClick={onNavigate}
                 className={({ isActive }) =>
                   `nav-link d-flex align-items-center justify-content-between px-3 py-2 rounded-3 transition-all ${
                     isActive

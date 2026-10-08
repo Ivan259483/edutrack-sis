@@ -2,6 +2,7 @@ import React, { useState, useContext, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../context/AuthContext';
 import {
+  FaBars,
   FaBell,
   FaSearch,
   FaSun,
@@ -12,7 +13,7 @@ import {
   FaSignOutAlt,
 } from 'react-icons/fa';
 
-const Navbar = ({ title }) => {
+const Navbar = ({ title, onMenuClick, menuOpen }) => {
   const { user, logout } = useContext(AuthContext);
   const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -37,21 +38,31 @@ const Navbar = ({ title }) => {
 
   return (
     <header
-      className="d-flex align-items-center justify-content-between px-4 py-2 bg-white border-bottom shadow-sm"
+      className="d-flex align-items-center justify-content-between gap-2 px-3 px-md-4 py-2 bg-white border-bottom shadow-sm"
       style={{ minHeight: '64px' }}
     >
-      {/* Left: Breadcrumbs matching your screenshot */}
-      <div className="d-flex align-items-center gap-2 small">
-        <span className="text-muted">EduTrack</span>
-        <span className="text-muted">/</span>
-        <strong className="text-dark fw-semibold">{title}</strong>
+      {/* Left: Mobile menu button + Breadcrumbs */}
+      <div className="d-flex align-items-center gap-2 small text-nowrap overflow-hidden">
+        <button
+          type="button"
+          className="btn btn-light p-2 d-md-none text-dark"
+          aria-label="Open navigation menu"
+          aria-controls="mobile-navigation"
+          aria-expanded={Boolean(menuOpen)}
+          onClick={onMenuClick}
+        >
+          <FaBars />
+        </button>
+        <span className="text-muted d-none d-sm-inline">EduTrack</span>
+        <span className="text-muted d-none d-sm-inline">/</span>
+        <strong className="text-dark fw-semibold text-truncate">{title}</strong>
       </div>
 
       {/* Right Controls: Search, Theme Toggle, Bell, User Profile Dropdown */}
-      <div className="d-flex align-items-center gap-3">
+      <div className="d-flex align-items-center gap-2 gap-md-3 flex-shrink-0">
         {/* Search Bar */}
         <form
-          className="input-group input-group-sm d-none d-md-flex"
+          className="input-group input-group-sm d-none d-lg-flex"
           style={{ width: '240px' }}
           role="search"
           onSubmit={(e) => {
@@ -103,7 +114,7 @@ const Navbar = ({ title }) => {
             >
               {user?.name ? user.name.split(' ').map((n) => n[0]).slice(0, 2).join('') : '?'}
             </div>
-            <div className="text-start d-none d-sm-block pe-1">
+            <div className="text-start d-none d-lg-block pe-1">
               <span className="fw-semibold text-dark d-block small" style={{ lineHeight: '1.2' }}>
                 {user?.name}
               </span>
