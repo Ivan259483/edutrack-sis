@@ -27,6 +27,8 @@ const notifyAdmins = async (settingKey, notification, action, type) => {
   await ActivityLog.create({ action, actor: 'Student Portal', timestamp, type });
 };
 
+// Subjects the student has passed: a published grade with remark "Passed"
+// (the Grade model sets it when the final grade is 3.00 or better).
 const passedCodes = async (student) =>
   new Set(
     (await Grade.find({ studentId: student.id, publishStatus: 'Published', finalGrade: { $lte: 3 } })).map(
@@ -60,6 +62,7 @@ export const getSubjects = asyncHandler(async (req, res) => {
     subjects.map((s) => ({
       ...s.toJSON(),
       prerequisiteMet: !s.prerequisite || passed.has(s.prerequisite),
+      passed: passed.has(s.code),
       classes: schedules
         .filter((c) => c.subjectCode === s.code)
         .map(({ day, startTime, endTime, room, instructor }) => ({ day, startTime, endTime, room, instructor })),
@@ -86,6 +89,10 @@ export const submitEnrollment = asyncHandler(async (req, res) => {
   const codes = [...new Set(req.body.subjectCodes.map((c) => c.toUpperCase()))];
   const [subjects, passed] = await Promise.all([Subject.find({ code: { $in: codes } }), passedCodes(student)]);
   if (subjects.length !== codes.length) throw new HttpError(400, 'One or more selected subjects do not exist.');
+  const alreadyPassed = codes.filter((code) => passed.has(code));
+  if (alreadyPassed.length) {
+    throw new HttpError(400, `You have already passed: ${alreadyPassed.join(', ')}. Remove them from your selection.`);
+  }
 
   const lines = subjects.map((s) => ({
     id: s.id,

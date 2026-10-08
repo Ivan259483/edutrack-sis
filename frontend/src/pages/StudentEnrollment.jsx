@@ -91,6 +91,7 @@ const StudentEnrollment = () => {
       ? `${sub.prerequisite}${sub.prerequisiteMet ? ' (completed)' : ' (not yet passed)'}`
       : 'None',
     description: sub.description || `${sub.title} (${sub.units} units).`,
+    passed: sub.passed,
   }));
 
   // Filtered Subject List
@@ -117,6 +118,8 @@ const StudentEnrollment = () => {
     setActionError('');
     if (selectedCodes.includes(code)) {
       setDraftCodes(selectedCodes.filter((c) => c !== code));
+    } else if (allAvailableSubjects.find((s) => s.code === code)?.passed) {
+      setActionError(`You have already passed ${code}.`);
     } else if (totalUnits + (allAvailableSubjects.find((s) => s.code === code)?.units || 0) > MAX_UNITS) {
       setActionError(`You can enroll in at most ${MAX_UNITS} units.`);
     } else {
@@ -365,11 +368,11 @@ const StudentEnrollment = () => {
                         Details
                       </button>
 
-                      {enrollmentStatus === 'Approved' ? (
+                      {isSelected && enrollmentStatus === 'Approved' ? (
                         <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-3 py-2 rounded-pill small">
                           ✓ Enrolled
                         </span>
-                      ) : enrollmentStatus === 'Pending' ? (
+                      ) : isSelected && enrollmentStatus === 'Pending' ? (
                         <span className="badge bg-warning bg-opacity-10 text-dark border border-warning border-opacity-25 px-3 py-2 rounded-pill small">
                           Selected
                         </span>
@@ -381,7 +384,16 @@ const StudentEnrollment = () => {
                         >
                           <FaTrash style={{ fontSize: '10px' }} /> Remove
                         </button>
-                      ) : (
+                      ) : sub.passed ? (
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-success px-3 py-1 rounded-pill small"
+                          disabled
+                          title="You already passed this subject"
+                        >
+                          ✓ Passed
+                        </button>
+                      ) : enrollmentStatus === 'Draft' ? (
                         <button
                           type="button"
                           className="btn btn-sm btn-primary px-3 py-1 rounded-pill small d-flex align-items-center gap-1"
@@ -389,7 +401,7 @@ const StudentEnrollment = () => {
                         >
                           <FaPlus style={{ fontSize: '10px' }} /> Add
                         </button>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 );

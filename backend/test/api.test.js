@@ -210,6 +210,13 @@ describe('student portal <-> admin portal', () => {
   let enrollmentId;
 
   it('student submits an enrollment that the admin can review', async () => {
+    // CS201 was already passed (published grade with remark "Passed").
+    const catalog = await call('GET', '/portal/subjects', { token: student });
+    assert.equal(catalog.body.find((s) => s.code === 'CS201').passed, true);
+    const repeat = await call('POST', '/portal/enrollment', { token: student, body: { subjectCodes: ['CS201', 'CS203'] } });
+    assert.equal(repeat.status, 400);
+    assert.match(repeat.body.message, /already passed: CS201/);
+
     const submitted = await call('POST', '/portal/enrollment', {
       token: student,
       body: { subjectCodes: ['CS203', 'CS204', 'CS206'] },
