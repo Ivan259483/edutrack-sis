@@ -23,29 +23,49 @@ reply to tickets, edit a student record) appears in the student portal.
 ## Requirements
 
 - Node.js 20+ (tested with Node 26)
-- MongoDB Community Server running locally:
+- MongoDB Community Server **8.0** running locally (persistent data in `/opt/homebrew/var/mongodb`
+  on Apple Silicon). Use 8.0: the backend's MongoDB driver (6.20, via Mongoose 8) supports servers
+  up to 8.2, so the 9.0 release is not supported yet. Steps from MongoDB's official macOS guide
+  (one-time; needs the Xcode command-line tools and Homebrew):
+
+```bash
+brew tap mongodb/brew
+```
 
 ```bash
 brew trust mongodb/brew
 ```
 
 ```bash
-brew install mongodb-community
+brew update
 ```
 
 ```bash
-brew services start mongodb-community
+brew install mongodb-community@8.0
 ```
+
+```bash
+brew services start mongodb-community@8.0
+```
+
+```bash
+brew services list
+```
+
+`mongodb-community@8.0` should show `started`; `mongosh` should connect. If macOS blocks `mongod`
+("developer cannot be verified"), allow it in System Settings → Privacy & Security → Open Anyway.
+Stop it later with `brew services stop mongodb-community@8.0`.
 
 ## First-time setup
 
-1. **Backend** — create `backend/.env` from `backend/.env.example` (set a long random `JWT_SECRET`), then:
+1. **Backend**: create `backend/.env` from `backend/.env.example` (set a long random `JWT_SECRET`;
+   `MONGO_URI=mongodb://127.0.0.1:27017/edutrack`), then:
 
    ```bash
    cd backend && npm install && npm run seed
    ```
 
-   `npm run seed` **erases** the database and loads the demo data.
+   `npm run seed` **erases** the `edutrack` database and loads the demo data.
 
 2. **Student portal**: `cd frontend && npm install`
 3. **Admin portal**: `cd student-information-admin-portal && npm install`
@@ -64,7 +84,13 @@ cd frontend && npm run dev
 cd ../student-information-admin-portal && npm run dev
 ```
 
-Open http://localhost:5173. Ports are fixed (`strictPort`); if a port is busy, stop the other app using it.
+Open http://localhost:5173. Ports are fixed (`strictPort`): student portal 5173, admin portal 5174,
+API 5001. If 5173 is taken by another app, either stop that app, or run the student portal on
+another port **and** tell the other two apps about it:
+
+- student portal: `npm run dev -- --port 5175`
+- admin portal `.env`: `VITE_STUDENT_PORTAL_URL=http://localhost:5175`
+- backend `.env`: add it to `CLIENT_ORIGINS` (e.g. `http://localhost:5173,http://localhost:5174,http://localhost:5175`)
 
 ### Demo accounts (created by `npm run seed`)
 
@@ -74,9 +100,11 @@ Open http://localhost:5173. Ports are fixed (`strictPort`); if a port is busy, s
 | Student | `juan.delacruz@edutrack.edu` or student ID `2024-00115` | `Student123!` |
 | Other sample students | their email, e.g. `pedro.santos@university.edu` | `Student123!` |
 
-Signing in on the **Administrator** tab of the EduTrack login sends you straight to the admin portal
-(the token is handed over in the URL fragment and removed immediately). Admins can also sign in at
-http://localhost:5174/login.
+The EduTrack login page (Student / Administrator tabs) is the only sign-in screen. Signing in on
+the **Administrator** tab sends you straight to the admin portal (the token is handed over in the
+URL fragment and removed immediately). Opening the admin portal while signed out, and **Sign out**,
+return to this page with the Administrator tab selected. The **Quick Demo Fill** buttons only
+appear in development (`npm run dev`).
 
 ## Features (course requirements)
 
