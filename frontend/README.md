@@ -1,16 +1,79 @@
-# React + Vite
+# EduTrack Student Portal
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The student-facing React app of **EduTrack SIS** (React 19, React Router, Bootstrap 5 /
+react-bootstrap, Axios). Students register, sign in, view their dashboard, edit their contact
+details, enroll in subjects, see published grades, their class schedule and announcements, and
+open support tickets. Administrators who sign in here are handed over to the separate Admin Portal.
 
-Currently, two official plugins are available:
+All data comes from the EduTrack REST API in `../backend` (Express + MongoDB). See the
+[project README](../README.md) for the full system (backend, both portals, MongoDB).
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Requirements
 
-## React Compiler
+- Node.js 20 or newer
+- The backend running on http://localhost:5001 with a seeded MongoDB database (below)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Setup
 
-## Expanding the ESLint configuration
+```bash
+npm install
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+```bash
+cp .env.example .env
+```
+
+### Environment variables (`.env`)
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `VITE_API_URL` | `http://localhost:5001/api` | Base URL of the EduTrack API (used by the Axios instance in `src/services/api.js`) |
+| `VITE_ADMIN_PORTAL_URL` | `http://localhost:5174` | Where administrators are sent after signing in |
+
+Both have defaults, so the app also runs without a `.env`. Values are baked in at build time;
+restart `npm run dev` after changing them. Never put secrets in `VITE_*` variables — they are
+visible in the browser.
+
+### Seed data
+
+Demo accounts and records are created by the backend seeder (this **erases** the backend database):
+
+```bash
+cd ../backend && npm run seed
+```
+
+| Role | Sign in with | Password |
+| --- | --- | --- |
+| Student | `juan.delacruz@edutrack.edu` or student ID `2024-00115` | `Student123!` |
+| Administrator | `admin@edutrack.edu` (Administrator tab → Admin Portal) | `Admin123!` |
+
+## Scripts
+
+| Command | What it does |
+| --- | --- |
+| `npm run dev` | Development server on http://localhost:5173 (fixed port; stop any other app using 5173) |
+| `npm run build` | Production build into `dist/` |
+| `npm run preview` | Serve the production build on port 5173 |
+| `npm run lint` | ESLint |
+
+Production hosting must rewrite unknown paths to `index.html` so deep links (e.g. `/student/grades`) work after a refresh.
+
+## Structure
+
+```text
+src/
+  App.jsx                 Routes (public, protected student pages, /admin/* handoff, 404)
+  context/                AuthProvider (JWT session) and the AuthContext object
+  services/api.js         Axios instance: base URL, Bearer token interceptor, 401 → sign out
+  services/useApi.js      Data-loading hook (loading / error / reload)
+  services/academic.js    GPA, program names, date/time helpers
+  components/             ProtectedRoute, layout (sidebar, navbar, mobile offcanvas), forms
+  pages/                  Login, Register (email OTP), Dashboard, Profile, Enrollment, Grades,
+                          Schedule, Notifications, Help & Support, 404
+```
+
+## Notes
+
+- "Forgot password" is a placeholder page; no reset email is sent.
+- Notification read/dismissed flags are stored per browser (`localStorage`); the notifications
+  themselves come from the API.
