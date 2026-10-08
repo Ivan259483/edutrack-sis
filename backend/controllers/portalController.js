@@ -39,6 +39,15 @@ export const getProfile = asyncHandler(async (req, res) => {
   res.json(await currentStudent(req));
 });
 
+// @route PUT /api/portal/profile — update own contact details only
+// (the validator whitelists the fields; identity/academic data stay registrar-managed)
+export const updateProfile = asyncHandler(async (req, res) => {
+  const student = await currentStudent(req);
+  student.set(req.body);
+  await student.save();
+  res.json(student);
+});
+
 // @route GET /api/portal/subjects — catalog with prerequisite status and this section's class times
 export const getSubjects = asyncHandler(async (req, res) => {
   const student = await currentStudent(req);

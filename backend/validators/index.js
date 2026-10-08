@@ -243,3 +243,25 @@ export const portalTicketRules = [
   validate,
 ];
 export const portalReplyRules = [text('message', 5000), validate];
+
+// Students may edit only their contact details. matchedData() in `validate`
+// drops every other field (role, studentId, fullName, program, ...).
+const phone = (field) =>
+  text(field, 30).matches(/^\+?[0-9][0-9 ()-]{6,24}$/).withMessage('must be a valid phone number');
+export const portalProfileRules = [
+  phone('contactNumber'),
+  text('address', 300),
+  body('personalEmail')
+    .optional()
+    .isString()
+    .withMessage('must be text')
+    .trim()
+    .toLowerCase()
+    .if((value) => value !== '')
+    .isEmail()
+    .withMessage('must be a valid email'),
+  text('emergencyContact', 120),
+  phone('emergencyContactNumber'),
+  optionalText('guardianRelationship', 60),
+  validate,
+];

@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import AppLayout from '../components/layout/AppLayout';
 import ChangePassword from '../components/ChangePassword';
+import EditContactForm from '../components/EditContactForm';
 import { LoadError, Loading } from '../components/PageState';
 import useApi from '../services/useApi';
 import { DEPARTMENTS, formatDate, programName } from '../services/academic';
@@ -13,11 +14,14 @@ import {
   FaHeartbeat,
   FaIdCard,
   FaFilePdf,
+  FaPen,
 } from 'react-icons/fa';
 
 const StudentProfile = () => {
-  const { data: student, loading, error, reload } = useApi('/portal/profile');
+  const { data: student, setData: setStudent, loading, error, reload } = useApi('/portal/profile');
   const { data: enrollment } = useApi('/portal/enrollment');
+  const [editing, setEditing] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   if (loading) return <AppLayout title="My Profile"><Loading /></AppLayout>;
   if (error) return <AppLayout title="My Profile"><LoadError message={error} onRetry={reload} /></AppLayout>;
@@ -79,7 +83,19 @@ const StudentProfile = () => {
             </div>
           </div>
 
-          <div>
+          <div className="d-flex flex-wrap gap-2">
+            {!editing && (
+              <button
+                type="button"
+                className="btn btn-primary d-flex align-items-center gap-2 rounded-3 px-3 py-2 small fw-semibold"
+                onClick={() => {
+                  setSaved(false);
+                  setEditing(true);
+                }}
+              >
+                <FaPen /> Edit Contact Details
+              </button>
+            )}
             <button
               type="button"
               className="btn btn-outline-primary d-flex align-items-center gap-2 rounded-3 px-3 py-2 small fw-semibold"
@@ -90,6 +106,23 @@ const StudentProfile = () => {
           </div>
         </div>
       </div>
+
+      {saved && (
+        <div className="alert alert-success rounded-4 small" role="status">
+          Your contact details have been updated.
+        </div>
+      )}
+      {editing && (
+        <EditContactForm
+          student={student}
+          onCancel={() => setEditing(false)}
+          onSaved={(updated) => {
+            setStudent(updated);
+            setEditing(false);
+            setSaved(true);
+          }}
+        />
+      )}
 
       {/* 2. Grid Cards (2x2 Responsive Layout matching prototype) */}
       <div className="row g-4">
@@ -216,7 +249,7 @@ const StudentProfile = () => {
         </div>
       </div>
       <p className="text-muted small mt-4 mb-0">
-        To correct any of these details, open a ticket in Help and Support. The registrar updates your official record.
+        You can update your contact details above. To correct your name, student ID or academic information, open a ticket in Help and Support.
       </p>
       <ChangePassword />
     </AppLayout>

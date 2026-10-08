@@ -1,13 +1,18 @@
 import express from 'express';
 import * as portal from '../controllers/portalController.js';
 import { authorize, protect } from '../middleware/auth.js';
-import { portalEnrollmentRules, portalReplyRules, portalTicketRules } from '../validators/index.js';
+import {
+  portalEnrollmentRules,
+  portalProfileRules,
+  portalReplyRules,
+  portalTicketRules,
+} from '../validators/index.js';
 
 // Student-only endpoints used by the EduTrack student portal.
 const router = express.Router();
 router.use(protect, authorize('student'));
 
-router.get('/profile', portal.getProfile);
+router.route('/profile').get(portal.getProfile).put(portalProfileRules, portal.updateProfile);
 router.get('/subjects', portal.getSubjects);
 router
   .route('/enrollment')

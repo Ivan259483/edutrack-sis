@@ -114,6 +114,31 @@ describe('authentication & security', () => {
     assert.equal(list.body.total, 1);
   });
 
+  it('lets students edit only their contact details', async () => {
+    const contact = {
+      contactNumber: '+63 917 000 1234',
+      address: '456 Rizal Ave, Manila',
+      personalEmail: 'juan.personal@example.com',
+      emergencyContact: 'Maria Dela Cruz',
+      emergencyContactNumber: '0918 222 3333',
+      guardianRelationship: 'Mother',
+    };
+    const res = await call('PUT', '/portal/profile', {
+      token: student,
+      body: { ...contact, role: 'admin', studentId: '9999-99999', fullName: 'Changed', program: 'BSBA', email: 'x@example.com' },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.contactNumber, contact.contactNumber);
+    assert.equal(res.body.studentId, '2024-00115');
+    assert.equal(res.body.fullName, 'Juan Manuel Dela Cruz');
+    assert.equal(res.body.program, 'BSIT');
+    assert.equal(res.body.email, 'juan.delacruz@edutrack.edu');
+    assert.equal((await call('GET', '/auth/me', { token: student })).body.user.role, 'student');
+    const invalid = await call('PUT', '/portal/profile', { token: student, body: { ...contact, contactNumber: 'abc', personalEmail: 'nope' } });
+    assert.equal(invalid.status, 400);
+    assert.match(invalid.body.message, /contactNumber/);
+  });
+
   it('changes a password with the current one', async () => {
     const token = await login('pedro.santos@university.edu', 'Student123!');
     const bad = await call('PUT', '/auth/password', { token, body: { currentPassword: 'wrong', password: 'NewPass123' } });
