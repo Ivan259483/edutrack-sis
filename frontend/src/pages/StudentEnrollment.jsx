@@ -1,6 +1,6 @@
-import React, { useState, useContext } from 'react';
+import { useState, useContext } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { AuthContext } from '../context/AuthContext';
+import { AuthContext } from '../context/auth-context';
 import AppLayout from '../components/layout/AppLayout';
 import { LoadError, Loading } from '../components/PageState';
 import API, { errorMessage } from '../services/api';
@@ -17,11 +17,9 @@ import {
   FaFilter,
   FaPlus,
   FaTrash,
-  FaInfoCircle,
   FaFileAlt,
   FaPrint,
   FaTimes,
-  FaExclamationTriangle,
   FaTimesCircle,
 } from 'react-icons/fa';
 

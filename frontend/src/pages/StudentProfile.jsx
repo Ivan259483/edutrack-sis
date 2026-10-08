@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import AppLayout from '../components/layout/AppLayout';
 import ChangePassword from '../components/ChangePassword';
 import EditContactForm from '../components/EditContactForm';
@@ -8,11 +8,8 @@ import { DEPARTMENTS, formatDate, programName } from '../services/academic';
 import {
   FaUser,
   FaEnvelope,
-  FaPhone,
-  FaMapMarkerAlt,
   FaGraduationCap,
   FaHeartbeat,
-  FaIdCard,
   FaFilePdf,
   FaPen,
 } from 'react-icons/fa';

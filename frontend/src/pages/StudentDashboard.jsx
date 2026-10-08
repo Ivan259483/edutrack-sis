@@ -1,6 +1,6 @@
-import React, { useContext } from 'react';
+import { useContext } from 'react';
 import { Link } from 'react-router-dom';
-import { AuthContext } from '../context/AuthContext';
+import { AuthContext } from '../context/auth-context';
 import AppLayout from '../components/layout/AppLayout';
 import { LoadError, Loading } from '../components/PageState';
 import useApi from '../services/useApi';

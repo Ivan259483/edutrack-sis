@@ -3,7 +3,7 @@ import AppLayout from '../components/layout/AppLayout';
 import { LoadError, Loading } from '../components/PageState';
 import useApi from '../services/useApi';
 import { DAYS, formatTime } from '../services/academic';
-import { AuthContext } from '../context/AuthContext';
+import { AuthContext } from '../context/auth-context';
 import {
   FaCalendarAlt,
   FaCalendarWeek,
@@ -12,14 +12,9 @@ import {
   FaClock,
   FaMapMarkerAlt,
   FaChalkboardTeacher,
-  FaDownload,
   FaCheckCircle,
-  FaTimes,
-  FaInfoCircle,
   FaBookOpen,
   FaUserGraduate,
-  FaBuilding,
-  FaChevronRight,
   FaEnvelope,
 } from 'react-icons/fa';
 
@@ -330,7 +325,6 @@ const StudentSchedule = () => {
                       const heightPx = cls.durationHours * 70 - 4; // 4px padding gap
 
                       // Column left offset: 90px + (dayIndex * (100% - 90px) / 6)
-                      const colWidthPercent = `calc((100% - 90px) / 6)`;
                       const leftPosition = `calc(90px + (${dayIndex} * (100% - 90px) / 6))`;
 
                       return (

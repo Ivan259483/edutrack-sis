@@ -1,5 +1,5 @@
 import { useContext, useEffect } from 'react';
-import { AuthContext } from '../context/AuthContext';
+import { AuthContext } from '../context/auth-context';
 import { ADMIN_PORTAL_URL } from '../services/api';
 import { openAdminPortal } from '../services/session';
 

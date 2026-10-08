@@ -1,7 +1,7 @@
 import { useContext } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { FaArrowLeft, FaCompass } from 'react-icons/fa';
-import { AuthContext } from '../context/AuthContext';
+import { AuthContext } from '../context/auth-context';
 
 // Catch-all route for URLs that don't match any page.
 const NotFoundPage = () => {

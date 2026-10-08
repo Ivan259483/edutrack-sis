@@ -1,6 +1,6 @@
-import React, { useState, useContext, useRef, useEffect } from 'react';
+import { useState, useContext, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { AuthContext } from '../../context/AuthContext';
+import { AuthContext } from '../../context/auth-context';
 import {
   FaBars,
   FaBell,

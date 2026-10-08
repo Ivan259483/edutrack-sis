@@ -1,6 +1,6 @@
-import React, { useState, useContext, useEffect } from 'react';
+import { useState, useContext, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { AuthContext } from '../context/AuthContext';
+import { AuthContext } from '../context/auth-context';
 import { FaGraduationCap, FaShieldAlt, FaEye, FaEyeSlash, FaBolt, FaLock } from 'react-icons/fa';
 
 const LoginPage = () => {

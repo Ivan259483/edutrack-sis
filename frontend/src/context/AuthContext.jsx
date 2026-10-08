@@ -1,8 +1,8 @@
-import React, { createContext, useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import API, { AUTH_EXPIRED_EVENT, errorMessage } from '../services/api';
 import { openAdminPortal } from '../services/session';
+import { AuthContext } from './auth-context';
 
-export const AuthContext = createContext();
 
 const readStoredUser = () => {
   try {

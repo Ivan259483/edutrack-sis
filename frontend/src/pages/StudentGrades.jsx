@@ -1,5 +1,5 @@
-import React, { useState, useContext } from 'react';
-import { AuthContext } from '../context/AuthContext';
+import { useState, useContext } from 'react';
+import { AuthContext } from '../context/auth-context';
 import AppLayout from '../components/layout/AppLayout';
 import { LoadError, Loading } from '../components/PageState';
 import useApi from '../services/useApi';

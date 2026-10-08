@@ -1,8 +1,8 @@
-import React, { useContext, useEffect, useMemo, useState } from 'react';
+import { useContext, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AppLayout from '../components/layout/AppLayout';
 import { LoadError } from '../components/PageState';
-import { AuthContext } from '../context/AuthContext';
+import { AuthContext } from '../context/auth-context';
 import useApi from '../services/useApi';
 import { formatDate, formatGrade, gradeSummary } from '../services/academic';
 import {
@@ -17,8 +17,6 @@ import {
   FaChevronRight,
   FaCheck,
   FaExternalLinkAlt,
-  FaTimes,
-  FaFilter,
 } from 'react-icons/fa';
 
 const ANNOUNCEMENT_STYLE = {

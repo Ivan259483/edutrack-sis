@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FaLock, FaEnvelope, FaCheckCircle, FaArrowLeft } from 'react-icons/fa';
+import { FaLock, FaCheckCircle, FaArrowLeft } from 'react-icons/fa';
 
 const ForgotPasswordPage = () => {
   const [identifier, setIdentifier] = useState('');
