@@ -16,7 +16,13 @@ import User from '../models/User.js';
 const data = JSON.parse(readFileSync(new URL('../seed/data.json', import.meta.url), 'utf8'));
 
 // Demo-only passwords for local testing.
-const ADMIN = { name: 'Dr. Maria Santos', email: 'admin@edutrack.edu', password: 'Admin123!' };
+// SEED_ADMIN_PASSWORD overrides the admin password (use a strong one for any
+// online database); the default is only for local demos.
+const ADMIN = {
+  name: 'Dr. Maria Santos',
+  email: 'admin@edutrack.edu',
+  password: process.env.SEED_ADMIN_PASSWORD || 'Admin123!',
+};
 const STUDENT_PASSWORD = 'Student123!';
 
 // The EduTrack portal's demo student, added to the shared dataset.
@@ -116,7 +122,11 @@ export const seedDatabase = async ({ log = console.log } = {}) => {
 
   log(`✅ Seeded ${students.length} students, ${data.subjects.length} subjects, ${data.enrollments.length} enrollments,`);
   log(`   ${data.grades.length + demoGrades.length} grades, ${data.schedules.length} schedules, ${data.tickets.length} tickets.`);
-  log('   🛡️  Admin:   admin@edutrack.edu | Admin123!');
+  log(
+    process.env.SEED_ADMIN_PASSWORD
+      ? '   🛡️  Admin:   admin@edutrack.edu | (password from SEED_ADMIN_PASSWORD)'
+      : '   🛡️  Admin:   admin@edutrack.edu | Admin123!'
+  );
   log('   🎓  Student: juan.delacruz@edutrack.edu (or 2024-00115) | Student123!');
   log(`   🎓  Every other sample student signs in with their email and ${STUDENT_PASSWORD}`);
 };
