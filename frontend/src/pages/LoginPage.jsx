@@ -42,7 +42,7 @@ const LoginPage = () => {
     setError('');
     setLoading(true);
 
-    const result = await login(email.trim(), password, role);
+    const result = await login(email.trim(), password, role, rememberMe);
 
     if (!result.success) {
       setLoading(false);

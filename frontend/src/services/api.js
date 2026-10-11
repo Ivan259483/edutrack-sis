@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { readSession } from './storage';
 
 // Backend (Express + MongoDB) and the admin portal. Override in frontend/.env.
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
@@ -11,7 +12,7 @@ const API = axios.create({ baseURL: API_URL, timeout: 15000 });
 
 // Automatically attach JWT token to every request if user is logged in
 API.interceptors.request.use((config) => {
-  const token = localStorage.getItem('edutrack_token');
+  const token = readSession('edutrack_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
