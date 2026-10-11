@@ -3,7 +3,7 @@
 The student-facing React app of **EduTrack SIS** (React 19, React Router, Bootstrap 5 /
 react-bootstrap, Axios). Students register, sign in, view their dashboard, edit their contact
 details, enroll in subjects, see published grades, their class schedule and announcements, and
-open support tickets. Administrators who sign in here are handed over to the separate Admin Portal.
+open support tickets. Administrators who sign in here are handed over to the separate Admin Portal (`../admin`).
 
 All data comes from the EduTrack REST API in `../backend` (Express + MongoDB). See the
 [project README](../README.md) for the full system (backend, both portals, MongoDB).

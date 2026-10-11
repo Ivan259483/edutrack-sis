@@ -1,13 +1,24 @@
 # EduTrack SIS — Full-Stack MERN Student Information System
 
 EduTrack is a Student Information System built with **MongoDB, Express.js, React and Node.js**.
-It is made of three apps that share one backend and one database:
+It is made of three apps in this one repository that share one backend and one database:
 
 | App | Folder | URL | Who uses it |
 | --- | --- | --- | --- |
-| REST API (Express + Mongoose) | `edutrack-sis/backend` | http://localhost:5001/api | both portals |
-| Student portal (React + Bootstrap + Axios) | `edutrack-sis/frontend` | http://localhost:5173 | students, shared login page |
-| Admin portal (React + TypeScript + Axios) | `student-information-admin-portal` | http://localhost:5174 | registrar / administrators |
+| REST API (Express + Mongoose) | `backend/` | http://localhost:5001/api | both portals |
+| Student portal (React + Bootstrap + Axios) | `frontend/` | http://localhost:5173 | students, shared login page |
+| Admin portal (React + TypeScript + Axios) | `admin/` | http://localhost:5174 | registrar / administrators |
+
+```text
+edutrack-sis/
+├── backend/    Express + MongoDB REST API     (Vercel project: edutrack-sis-api)
+├── frontend/   Student portal + login page    (Vercel project: edutrack-sis)
+├── admin/      Admin portal                   (Vercel project: student-information-admin-portal)
+└── README.md
+```
+
+The admin portal used to live in its own `student-information-admin-portal` repository; it was
+merged into `admin/` with its full commit history (`git subtree`).
 
 ```text
  Student portal (5173) ──┐                         ┌── MongoDB (edutrack database)
@@ -68,9 +79,10 @@ Stop it later with `brew services stop mongodb-community@8.0`.
    `npm run seed` **erases** the `edutrack` database and loads the demo data.
 
 2. **Student portal**: `cd frontend && npm install`
-3. **Admin portal**: `cd student-information-admin-portal && npm install`
+3. **Admin portal**: `cd admin && npm install` (optional `admin/.env` from `admin/.env.example`;
+   its defaults already match the local ports)
 
-## Running (three terminals)
+## Running (three terminals, each started from the `edutrack-sis` folder)
 
 ```bash
 cd backend && npm run dev
@@ -81,7 +93,7 @@ cd frontend && npm run dev
 ```
 
 ```bash
-cd ../student-information-admin-portal && npm run dev
+cd admin && npm run dev
 ```
 
 Open http://localhost:5173. Ports are fixed (`strictPort`): student portal 5173, admin portal 5174,
@@ -150,17 +162,37 @@ year, students with history cannot be deleted, only pending enrollments can be r
 remarks, prerequisite concerns need an override), grade encoding can be closed in Settings, only complete
 grades can be published, and room/instructor/section schedule conflicts are rejected.
 
-## Tests
+## Tests and builds
+
+Run each line from the `edutrack-sis` folder:
 
 ```bash
 cd backend && npm test
 ```
 
 ```bash
-cd ../student-information-admin-portal && npm test
+cd frontend && npm run lint && npm run build
+```
+
+```bash
+cd admin && npm run typecheck && npm run lint && npm test && npm run build
 ```
 
 The backend tests need MongoDB running and use a separate `edutrack_test` database.
+
+## Deployment (Vercel)
+
+All three Vercel projects are connected to this repository, one per folder (Root Directory):
+
+| Vercel project | Root Directory | Production URL |
+| --- | --- | --- |
+| `edutrack-sis-api` | `backend` | https://edutrack-sis-api.vercel.app |
+| `edutrack-sis` | `frontend` | https://edutrack-sis-xi.vercel.app |
+| `student-information-admin-portal` | `admin` | https://student-information-admin-portal.vercel.app |
+
+Pushing to `main` deploys to production; other branches get preview deployments. Each folder's
+`vercel.json` has an `ignoreCommand` that skips the build when nothing in that folder changed since
+the project's last successful deployment (it builds whenever that can't be determined).
 
 ## Notes & limitations
 
