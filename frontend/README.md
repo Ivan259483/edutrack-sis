@@ -80,8 +80,12 @@ signed-out visitors and **Sign out** back to `/login?role=admin`, which opens th
 tab. The **Quick Demo Fill** buttons appear only in development (`npm run dev`); production
 builds don't include them or the demo passwords.
 
+**Remember Me** keeps the session in `localStorage`, so it survives closing the browser. Without
+it the session is kept in `sessionStorage` and ends when the tab is closed. For administrators the
+choice is passed on to the Admin Portal (`#token=…&remember=0`).
+
 ## Notes
 
-- "Forgot password" is a placeholder page; no reset email is sent.
+- There is no password-reset page yet; students change their password on My Profile.
 - Notification read/dismissed flags are stored per browser (`localStorage`); the notifications
   themselves come from the API.

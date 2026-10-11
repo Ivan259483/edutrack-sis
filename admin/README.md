@@ -43,7 +43,9 @@ through the EduTrack Express/MongoDB REST API in `../backend`. See the
   `http://localhost:5175` if another app holds 5173) and restart `npm run dev`.
 - **Sign-in**: there is no admin login form. Administrators sign in on the EduTrack login page
   (Administrator tab); it hands the JWT over as `#token=…`, which is validated with
-  `/api/auth/me`, stored in `localStorage` (`edutrack_admin_token`) and removed from the address bar.
+  `/api/auth/me`, stored as `edutrack_admin_token` and removed from the address bar. It is kept in
+  `localStorage` when **Remember Me** was checked, otherwise in `sessionStorage` (the login adds
+  `&remember=0`), so the session ends when the tab is closed.
 - **Signed out**: any admin page, including `/login`, redirects to
   `VITE_STUDENT_PORTAL_URL/login?role=admin` with `location.replace`, so it isn't kept in history.
   **Sign out** clears the admin token and goes to that same page; Back cannot reopen the
