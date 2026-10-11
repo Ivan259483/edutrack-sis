@@ -138,15 +138,13 @@ const StudentSchedule = () => {
           </div>
 
           <div className="d-flex flex-wrap align-items-center gap-2">
-            {/* Term Dropdown */}
-            <select
-              className="form-select bg-dark border-secondary text-white small"
-              value={term}
-              onChange={() => {}}
-              aria-label="Academic term"
+            {/* Current term (schedules are kept for the current term only) */}
+            <span
+              className="badge rounded-3 px-3 py-2 fw-medium text-light border border-secondary"
+              style={{ backgroundColor: '#1e293b', fontSize: '13px' }}
             >
-              <option value={term}>{term}</option>
-            </select>
+              {term}
+            </span>
 
             {/* View Mode Toggle */}
             <div className="btn-group p-1 rounded-3" style={{ backgroundColor: '#1e293b', border: '1px solid #334155' }}>
@@ -399,7 +397,7 @@ const StudentSchedule = () => {
 
               {/* Day Filter Pills */}
               <div className="d-flex gap-1 flex-wrap">
-                {['All', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map((day) => (
+                {['All', ...DAYS].map((day) => (
                   <button
                     key={day}
                     type="button"

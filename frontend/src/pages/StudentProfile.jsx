@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import AppLayout from '../components/layout/AppLayout';
 import ChangePassword from '../components/ChangePassword';
 import EditContactForm from '../components/EditContactForm';
@@ -19,6 +20,14 @@ const StudentProfile = () => {
   const { data: enrollment } = useApi('/portal/enrollment');
   const [editing, setEditing] = useState(false);
   const [saved, setSaved] = useState(false);
+  const { hash } = useLocation();
+
+  // The account menu's "Settings" opens this page at the Account Security card.
+  useEffect(() => {
+    if (!loading && hash === '#security') {
+      document.getElementById('security')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [loading, hash]);
 
   if (loading) return <AppLayout title="My Profile"><Loading /></AppLayout>;
   if (error) return <AppLayout title="My Profile"><LoadError message={error} onRetry={reload} /></AppLayout>;
