@@ -1,12 +1,16 @@
-# student-information-admin-portal
+# EduTrack Admin Portal (`admin/`)
 
 Admin portal of **EduTrack SIS**, a MERN student information system (React + TypeScript + Axios).
 Students use the EduTrack student portal, and both portals share the EduTrack Express/MongoDB REST API.
-The API and the student portal live in the [edutrack-sis](https://github.com/Ivan259483/edutrack-sis) repository.
+The API (`../backend`) and the student portal (`../frontend`) live next to this folder in the
+[edutrack-sis](https://github.com/Ivan259483/edutrack-sis) repository. This portal used to be the
+separate `student-information-admin-portal` repository; its history was kept when it moved here.
+It is still deployed as the `student-information-admin-portal` Vercel project (Root Directory `admin`).
 
 ## Run and verify
 
 Use Node.js 24 LTS or a newer supported Node release (verified here on Node 26.5).
+Run these inside `admin/` (`cd admin` from the `edutrack-sis` folder):
 
 ```sh
 npm ci
@@ -24,11 +28,9 @@ npm audit --omit=dev
 
 ## Backend connection (EduTrack SIS)
 
-This portal is the administrator side of **EduTrack SIS**
-([edutrack-sis](https://github.com/Ivan259483/edutrack-sis), cloned next to this folder). It signs in and
-stores every record through the EduTrack Express/MongoDB REST API. See the
-[edutrack-sis README](https://github.com/Ivan259483/edutrack-sis#readme) for the
-full setup (MongoDB, seeding, running all three apps).
+This portal is the administrator side of **EduTrack SIS**. It signs in and stores every record
+through the EduTrack Express/MongoDB REST API in `../backend`. See the
+[project README](../README.md) for the full setup (MongoDB, seeding, running all three apps).
 
 - Runs on http://localhost:5174 (`strictPort`). Configure it with a `.env` file (see `.env.example`):
 
