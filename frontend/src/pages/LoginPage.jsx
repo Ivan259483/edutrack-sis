@@ -42,7 +42,7 @@ const LoginPage = () => {
     setError('');
     setLoading(true);
 
-    const result = await login(email.trim(), password, role);
+    const result = await login(email.trim(), password, role, rememberMe);
 
     if (!result.success) {
       setLoading(false);
@@ -178,7 +178,7 @@ const LoginPage = () => {
               </div>
 
               {/* Options Row */}
-              <div className="d-flex justify-content-between align-items-center mb-4 small">
+              <div className="d-flex align-items-center mb-4 small">
                 <div className="form-check">
                   <input
                     className="form-check-input bg-dark border-secondary"
@@ -191,9 +191,6 @@ const LoginPage = () => {
                     Remember Me
                   </label>
                 </div>
-                <Link to="/forgot-password" className="text-primary text-decoration-none small">
-                  Forgot Password?
-                </Link>
               </div>
 
               {/* Sign In Button */}

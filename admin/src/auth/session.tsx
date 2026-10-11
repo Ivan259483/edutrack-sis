@@ -4,25 +4,26 @@ import { leaveTo, studentLoginUrl } from '@/lib/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
 import { apiAuthClient } from './client';
+import { parseHandoff } from './handoff';
 import {
   Context,
   useAdminSession,
   type AdminSession,
   type AuthClient,
+  type Handoff,
   type SessionStatus,
 } from './context';
 
-// The EduTrack login page hands an admin over as `#token=<jwt>`. The token is
-// read once and removed from the address bar immediately.
-function takeHandoffToken(): string | undefined {
-  const match = /^#token=([\w-]+\.[\w-]+\.[\w-]+)$/.exec(window.location.hash);
-  if (!match) return undefined;
+// The handed-over fragment is read once and removed from the address bar immediately.
+function takeHandoff(): Handoff | undefined {
+  const handoff = parseHandoff(window.location.hash);
+  if (!handoff) return undefined;
   window.history.replaceState(
     null,
     '',
     window.location.pathname + window.location.search
   );
-  return match[1];
+  return handoff;
 }
 
 export function SessionProvider({
@@ -36,7 +37,7 @@ export function SessionProvider({
   const [status, setStatus] = useState<SessionStatus>('loading');
   useEffect(() => {
     let active = true;
-    client.restore(takeHandoffToken()).then((restored) => {
+    client.restore(takeHandoff()).then((restored) => {
       if (!active) return;
       setSession(restored);
       setStatus(restored ? 'signed-in' : 'signed-out');

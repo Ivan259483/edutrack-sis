@@ -5,7 +5,6 @@ import {
   FaBars,
   FaBell,
   FaSearch,
-  FaSun,
   FaChevronDown,
   FaUser,
   FaCog,
@@ -58,7 +57,7 @@ const Navbar = ({ title, onMenuClick, menuOpen }) => {
         <strong className="text-dark fw-semibold text-truncate">{title}</strong>
       </div>
 
-      {/* Right Controls: Search, Theme Toggle, Bell, User Profile Dropdown */}
+      {/* Right Controls: Search, Bell, User Profile Dropdown */}
       <div className="d-flex align-items-center gap-2 gap-md-3 flex-shrink-0">
         {/* Search Bar */}
         <form
@@ -82,15 +81,6 @@ const Navbar = ({ title, onMenuClick, menuOpen }) => {
             onChange={(e) => setSearch(e.target.value)}
           />
         </form>
-
-        {/* Theme Toggle Button */}
-        <button
-          type="button"
-          className="btn btn-light rounded-circle p-2 text-muted"
-          title="Toggle Theme"
-        >
-          <FaSun />
-        </button>
 
         {/* Notification Bell with Badge */}
         <Link

@@ -10,17 +10,21 @@ export const STUDENT_PORTAL_URL: string =
 export const TOKEN_KEY = 'edutrack_admin_token';
 export const AUTH_EXPIRED_EVENT = 'edutrack:auth-expired';
 
+// "Remember Me" on the EduTrack login keeps the token in localStorage (it
+// survives closing the browser); otherwise it lives in sessionStorage and the
+// session ends when the tab is closed.
 export const tokenStore = {
   get(): string | null {
     try {
-      return localStorage.getItem(TOKEN_KEY);
+      return localStorage.getItem(TOKEN_KEY) ?? sessionStorage.getItem(TOKEN_KEY);
     } catch {
       return null;
     }
   },
-  set(token: string) {
+  set(token: string, remember = true) {
     try {
-      localStorage.setItem(TOKEN_KEY, token);
+      (remember ? localStorage : sessionStorage).setItem(TOKEN_KEY, token);
+      (remember ? sessionStorage : localStorage).removeItem(TOKEN_KEY);
     } catch {
       /* Session lasts for this page only if storage is blocked. */
     }
@@ -28,6 +32,7 @@ export const tokenStore = {
   clear() {
     try {
       localStorage.removeItem(TOKEN_KEY);
+      sessionStorage.removeItem(TOKEN_KEY);
     } catch {
       /* Nothing stored. */
     }

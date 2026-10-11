@@ -15,8 +15,8 @@ const toSession = (user: ApiUser): AdminSession => {
 
 // JWT session handed over by the EduTrack login page (student portal).
 export const apiAuthClient: AuthClient = {
-  async restore(handoffToken) {
-    if (handoffToken) tokenStore.set(handoffToken);
+  async restore(handoff) {
+    if (handoff) tokenStore.set(handoff.token, handoff.remember);
     if (!tokenStore.get()) return null;
     try {
       const { data } = await api.get<{ user: ApiUser }>('/auth/me');

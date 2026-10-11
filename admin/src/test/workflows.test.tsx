@@ -450,6 +450,101 @@ function MutationProbe() {
     </>
   );
 }
+describe('class schedules: edit and delete', () => {
+  // Two Monday classes of BSIT 3A from the seed data (sc1 08:00, sc2 10:00).
+  function scheduleRepo() {
+    const state = seedState();
+    state.schedules = state.schedules.filter((s) =>
+      ['sc1', 'sc2'].includes(s.id)
+    );
+    const repo = createLocalRepository(localStorage);
+    repo.save(state);
+    return repo;
+  }
+  it('edits a class with the same form used to add one', async () => {
+    const user = userEvent.setup();
+    const repo = scheduleRepo();
+    app('/schedules', repo);
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Edit CS201 for BSIT 3A on Monday',
+      })
+    );
+    const dialog = screen.getByRole('dialog');
+    expect(
+      within(dialog).getByRole('heading', { name: 'Edit Class' })
+    ).toBeTruthy();
+    const room = within(dialog).getByLabelText('Room');
+    expect((room as HTMLInputElement).value).toBe('Rm 401');
+    await user.clear(room);
+    await user.type(room, 'Rm 410');
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Save Schedule' })
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    const saved = repo.load()!.schedules;
+    expect(saved).toHaveLength(2);
+    expect(saved.find((s) => s.id === 'sc1')).toMatchObject({
+      room: 'Rm 410',
+      subjectCode: 'CS201',
+      startTime: '08:00',
+    });
+    expect(screen.getAllByText('Rm 410').length).toBeGreaterThan(0);
+  });
+  it('rejects an edit that would conflict with another class', async () => {
+    const user = userEvent.setup();
+    const repo = scheduleRepo();
+    app('/schedules', repo);
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Edit CS201 for BSIT 3A on Monday',
+      })
+    );
+    const dialog = screen.getByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Start Time'), {
+      target: { value: '10:30' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('End Time'), {
+      target: { value: '11:00' },
+    });
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Save Schedule' })
+    );
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(
+      repo.load()!.schedules.find((s) => s.id === 'sc1')?.startTime
+    ).toBe('08:00');
+  });
+  it('deletes a class only after confirmation', async () => {
+    const user = userEvent.setup();
+    const repo = scheduleRepo();
+    app('/schedules', repo);
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Delete CS202 for BSIT 3A on Monday',
+      })
+    );
+    const confirm = screen.getByRole('alertdialog');
+    expect(within(confirm).getByText(/Information Management/)).toBeTruthy();
+    expect(repo.load()!.schedules).toHaveLength(2);
+    await user.click(within(confirm).getByRole('button', { name: 'Cancel' }));
+    expect(repo.load()!.schedules).toHaveLength(2);
+    await user.click(
+      screen.getByRole('button', { name: 'Delete CS202 for BSIT 3A on Monday' })
+    );
+    await user.click(
+      within(screen.getByRole('alertdialog')).getByRole('button', {
+        name: 'Delete',
+      })
+    );
+    await waitFor(() => expect(repo.load()!.schedules).toHaveLength(1));
+    expect(screen.queryByText('Information Management')).toBeNull();
+    expect(screen.getByText('Scheduled Classes (1)')).toBeTruthy();
+    expect(repo.load()!.activityLogs[0].action).toBe(
+      'Deleted class Information Management for BSIT 3A'
+    );
+  });
+});
 describe('atomic persistence and notification preferences', () => {
   it('never applies an action if persistence fails', () => {
     const state = seedState();

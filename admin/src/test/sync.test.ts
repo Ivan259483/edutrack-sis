@@ -52,6 +52,30 @@ describe('server sync requests', () => {
       { method: 'put', url: '/settings', data: settings.settings },
     ]);
   });
+  it('sends an edited class as PUT and a deleted class as DELETE', () => {
+    const before = seedState();
+    const [first, second] = before.schedules;
+    const edited = applyChange(
+      before,
+      'schedules',
+      before.schedules.map((s) => (s.id === first.id ? { ...s, room: 'Rm 410' } : s))
+    );
+    expect(diffRequests(before, edited)).toEqual([
+      {
+        method: 'put',
+        url: `/schedules/${first.id}`,
+        data: { ...first, room: 'Rm 410' },
+      },
+    ]);
+    const removed = applyChange(
+      before,
+      'schedules',
+      before.schedules.filter((s) => s.id !== second.id)
+    );
+    expect(diffRequests(before, removed)).toEqual([
+      { method: 'delete', url: `/schedules/${second.id}` },
+    ]);
+  });
   it('never deletes notifications or activity logs on the server', () => {
     const before = seedState();
     const after = { ...before, notifications: [], activityLogs: [] };

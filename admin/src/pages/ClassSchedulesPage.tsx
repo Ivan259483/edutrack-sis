@@ -1,6 +1,16 @@
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Card,
   CardContent,
   CardDescription,
@@ -44,7 +54,9 @@ import {
   CalendarDays,
   Clock,
   MapPin,
+  Pencil,
   Plus,
+  Trash2,
   User,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -97,7 +109,12 @@ export function ClassSchedulesPage() {
   const [sectionFilter, setSectionFilter] = useState('all');
   const [instructorFilter, setInstructorFilter] = useState('all');
   const [dayFilter, setDayFilter] = useState('all');
-  const [showAddForm, setShowAddForm] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  // The class being edited; null while adding a new one.
+  const [editing, setEditing] = useState<ScheduleClass | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ScheduleClass | null>(
+    null
+  );
 
   // Form state
   const [formSubject, setFormSubject] = useState('');
@@ -131,6 +148,70 @@ export function ClassSchedulesPage() {
       ),
     [schedules]
   );
+  // A class whose subject is not in the catalog list stays selectable while editing it.
+  const subjectOptions = useMemo(
+    () =>
+      editing && !subjects.some((s) => s.code === editing.subjectCode)
+        ? [
+            ...subjects,
+            {
+              id: `current-${editing.subjectCode}`,
+              code: editing.subjectCode,
+              title: editing.subjectTitle,
+              units: 0,
+            },
+          ]
+        : subjects,
+    [editing]
+  );
+
+  const openAdd = () => {
+    setEditing(null);
+    setFormSubject('');
+    setFormSection('');
+    setFormInstructor('');
+    setFormDay('');
+    setFormStartTime('');
+    setFormEndTime('');
+    setFormRoom('');
+    setShowForm(true);
+  };
+
+  const openEdit = (cls: ScheduleClass) => {
+    setEditing(cls);
+    setFormSubject(
+      subjects.find((s) => s.code === cls.subjectCode)?.id ??
+        `current-${cls.subjectCode}`
+    );
+    setFormSection(cls.section);
+    setFormInstructor(cls.instructor);
+    setFormDay(cls.day);
+    setFormStartTime(cls.startTime);
+    setFormEndTime(cls.endTime);
+    setFormRoom(cls.room);
+    setShowForm(true);
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    setEditing(null);
+  };
+
+  const handleDelete = () => {
+    if (!deleteTarget) return;
+    if (
+      !setSchedules(
+        (prev) => prev.filter((s) => s.id !== deleteTarget.id),
+        `Deleted class ${deleteTarget.subjectTitle} for ${deleteTarget.section}`
+      )
+    )
+      return;
+    toast.success('Class deleted', {
+      description: `${deleteTarget.subjectTitle} for ${deleteTarget.section} on ${deleteTarget.day} has been removed.`,
+    });
+    setDeleteTarget(null);
+  };
+
   const handleSave = () => {
     if (
       !formSubject ||
@@ -154,11 +235,11 @@ export function ClassSchedulesPage() {
       return;
     }
 
-    const subject = subjects.find((s) => s.id === formSubject);
+    const subject = subjectOptions.find((s) => s.id === formSubject);
     if (!subject) return;
 
     const newClass: ScheduleClass = {
-      id: crypto.randomUUID(),
+      id: editing?.id ?? crypto.randomUUID(),
       subjectCode: subject.code,
       subjectTitle: subject.title,
       section: formSection,
@@ -184,22 +265,20 @@ export function ClassSchedulesPage() {
     }
     if (
       !setSchedules(
-        (prev) => [...prev, newClass],
-        'Added class ' + subject.title + ' for ' + formSection
+        (prev) =>
+          editing
+            ? prev.map((s) => (s.id === editing.id ? newClass : s))
+            : [...prev, newClass],
+        `${editing ? 'Updated' : 'Added'} class ${subject.title} for ${formSection}`
       )
     )
       return;
-    toast.success('Class added', {
-      description: `${subject.title} for ${formSection} has been scheduled.`,
+    toast.success(editing ? 'Class updated' : 'Class added', {
+      description: editing
+        ? `${subject.title} for ${formSection} has been updated.`
+        : `${subject.title} for ${formSection} has been scheduled.`,
     });
-    setShowAddForm(false);
-    setFormSubject('');
-    setFormSection('');
-    setFormInstructor('');
-    setFormDay('');
-    setFormStartTime('');
-    setFormEndTime('');
-    setFormRoom('');
+    closeForm();
   };
 
   const getClassPosition = (cls: ScheduleClass) => {
@@ -222,7 +301,7 @@ export function ClassSchedulesPage() {
           <Button
             aria-label="Add Class"
             className="gap-2"
-            onClick={() => setShowAddForm(true)}
+            onClick={openAdd}
           >
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">Add Class</span>
@@ -370,10 +449,13 @@ export function ClassSchedulesPage() {
                         const colors = programColors[cls.program];
                         const hasConflict = conflictIds.has(cls.id);
                         return (
-                          <div
+                          <button
+                            type="button"
                             key={cls.id}
+                            onClick={() => openEdit(cls)}
+                            aria-label={`Edit ${cls.subjectCode} for ${cls.section} on ${cls.day} (grid)`}
                             className={cn(
-                              'absolute left-1 right-1 rounded-md border p-1.5 text-xs overflow-hidden',
+                              'absolute left-1 right-1 rounded-md border p-1.5 text-left text-xs overflow-hidden transition-shadow hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring',
                               colors.bg,
                               colors.border,
                               hasConflict &&
@@ -408,7 +490,7 @@ export function ClassSchedulesPage() {
                                 </span>
                               </div>
                             )}
-                          </div>
+                          </button>
                         );
                       })}
                   </div>
@@ -483,6 +565,26 @@ export function ClassSchedulesPage() {
                         Conflict
                       </span>
                     )}
+                    <div className="flex items-center gap-1">
+                      <Button
+                        aria-label={`Edit ${cls.subjectCode} for ${cls.section} on ${cls.day}`}
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => openEdit(cls)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        aria-label={`Delete ${cls.subjectCode} for ${cls.section} on ${cls.day}`}
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
+                        onClick={() => setDeleteTarget(cls)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               );
@@ -491,13 +593,15 @@ export function ClassSchedulesPage() {
         </CardContent>
       </Card>
 
-      {/* Add Class Dialog */}
-      <Dialog open={showAddForm} onOpenChange={setShowAddForm}>
+      {/* Add / Edit Class Dialog */}
+      <Dialog open={showForm} onOpenChange={(open) => !open && closeForm()}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Add Class</DialogTitle>
+            <DialogTitle>{editing ? 'Edit Class' : 'Add Class'}</DialogTitle>
             <DialogDescription>
-              Schedule a new class. Conflicts will be detected automatically.
+              {editing
+                ? 'Update this class. Conflicts will be detected automatically.'
+                : 'Schedule a new class. Conflicts will be detected automatically.'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -508,7 +612,7 @@ export function ClassSchedulesPage() {
                   <SelectValue placeholder="Select subject" />
                 </SelectTrigger>
                 <SelectContent>
-                  {subjects.map((s) => (
+                  {subjectOptions.map((s) => (
                     <SelectItem key={s.id} value={s.id}>
                       {s.code} - {s.title}
                     </SelectItem>
@@ -596,13 +700,40 @@ export function ClassSchedulesPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddForm(false)}>
+            <Button variant="outline" onClick={closeForm}>
               Cancel
             </Button>
             <Button onClick={handleSave}>Save Schedule</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Class</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {deleteTarget?.subjectCode} (
+              {deleteTarget?.subjectTitle}) for {deleteTarget?.section} on{' '}
+              {deleteTarget?.day}, {deleteTarget?.startTime}–
+              {deleteTarget?.endTime}? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

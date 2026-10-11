@@ -2,6 +2,7 @@ import { useContext, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/auth-context';
 import { openAdminPortal } from '../services/session';
+import { isRemembered } from '../services/storage';
 
 // Sends administrators to the admin portal (with their session, if signed in
 // here); everyone else to this login page's Administrator tab.
@@ -10,7 +11,7 @@ const AdminRedirect = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (user?.role === 'admin' && token) openAdminPortal(token);
+    if (user?.role === 'admin' && token) openAdminPortal(token, isRemembered());
     else navigate('/login?role=admin', { replace: true });
   }, [user, token, navigate]);
 

@@ -2,7 +2,7 @@ import React, { useState, useContext } from 'react';
 import AppLayout from '../components/layout/AppLayout';
 import { LoadError, Loading } from '../components/PageState';
 import useApi from '../services/useApi';
-import { DAYS, DEPARTMENTS, formatTime } from '../services/academic';
+import { DAYS, DEPARTMENTS, formatTime, programName } from '../services/academic';
 import { AuthContext } from '../context/auth-context';
 import {
   FaCalendarAlt,
@@ -138,15 +138,13 @@ const StudentSchedule = () => {
           </div>
 
           <div className="d-flex flex-wrap align-items-center gap-2">
-            {/* Term Dropdown */}
-            <select
-              className="form-select bg-dark border-secondary text-white small"
-              value={term}
-              onChange={() => {}}
-              aria-label="Academic term"
+            {/* Current term (schedules are kept for the current term only) */}
+            <span
+              className="badge rounded-3 px-3 py-2 fw-medium text-light border border-secondary"
+              style={{ backgroundColor: '#1e293b', fontSize: '13px' }}
             >
-              <option value={term}>{term}</option>
-            </select>
+              {term}
+            </span>
 
             {/* View Mode Toggle */}
             <div className="btn-group p-1 rounded-3" style={{ backgroundColor: '#1e293b', border: '1px solid #334155' }}>
@@ -399,7 +397,7 @@ const StudentSchedule = () => {
 
               {/* Day Filter Pills */}
               <div className="d-flex gap-1 flex-wrap">
-                {['All', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map((day) => (
+                {['All', ...DAYS].map((day) => (
                   <button
                     key={day}
                     type="button"
@@ -654,7 +652,7 @@ const StudentSchedule = () => {
                     </div>
                     <div className="col-sm-6">
                       <span className="text-muted">Degree Program: </span>
-                      <strong className="text-dark">Bachelor of Science in Information Technology</strong>
+                      <strong className="text-dark">{programName(user?.profile?.program)}</strong>
                     </div>
                     <div className="col-sm-6">
                       <span className="text-muted">Year Level & Section: </span>
@@ -703,9 +701,7 @@ const StudentSchedule = () => {
                   <div className="row pt-4 mt-4 border-top">
                     <div className="col-6 text-center">
                       <div className="text-muted small mb-4">Issued and Verified by:</div>
-                      <div className="fw-bold text-dark text-uppercase text-decoration-underline">
-                        Atty. Ricardo M. Gomez
-                      </div>
+                      <div className="border-bottom border-dark mx-auto" style={{ width: '180px', height: '1.5em' }} />
                       <div className="small text-muted">University Registrar</div>
                     </div>
                     <div className="col-6 text-center">

@@ -198,5 +198,6 @@ the project's last successful deployment (it builds whenever that can't be deter
 
 - Verification emails use Gmail SMTP (`EMAIL_USER`/`EMAIL_PASS` App Password). If they are empty or
   sending fails in development, the code is printed in the backend console.
-- "Forgot password" is a UI placeholder (no reset email is sent yet).
+- There is no self-service password reset yet: signed-in users change their password on their
+  profile (students) or in the admin Profile dialog, and the registrar can help with a forgotten one.
 - Seeded passwords are for local demos only; change them before any real use.
