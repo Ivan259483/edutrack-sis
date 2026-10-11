@@ -140,7 +140,7 @@ const StudentProfile = () => {
               </div>
               <div className="d-flex justify-content-between py-1 border-bottom border-light">
                 <span className="text-muted">Date of Birth</span>
-                <span className="fw-semibold text-dark">May 14, 2003</span>
+                <span className="fw-semibold text-dark">{profile.dateOfBirth}</span>
               </div>
               <div className="d-flex justify-content-between py-1 border-bottom border-light">
                 <span className="text-muted">Gender</span>

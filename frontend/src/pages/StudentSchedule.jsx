@@ -2,7 +2,7 @@ import React, { useState, useContext } from 'react';
 import AppLayout from '../components/layout/AppLayout';
 import { LoadError, Loading } from '../components/PageState';
 import useApi from '../services/useApi';
-import { DAYS, DEPARTMENTS, formatTime } from '../services/academic';
+import { DAYS, DEPARTMENTS, formatTime, programName } from '../services/academic';
 import { AuthContext } from '../context/auth-context';
 import {
   FaCalendarAlt,
@@ -654,7 +654,7 @@ const StudentSchedule = () => {
                     </div>
                     <div className="col-sm-6">
                       <span className="text-muted">Degree Program: </span>
-                      <strong className="text-dark">Bachelor of Science in Information Technology</strong>
+                      <strong className="text-dark">{programName(user?.profile?.program)}</strong>
                     </div>
                     <div className="col-sm-6">
                       <span className="text-muted">Year Level & Section: </span>
@@ -703,9 +703,7 @@ const StudentSchedule = () => {
                   <div className="row pt-4 mt-4 border-top">
                     <div className="col-6 text-center">
                       <div className="text-muted small mb-4">Issued and Verified by:</div>
-                      <div className="fw-bold text-dark text-uppercase text-decoration-underline">
-                        Atty. Ricardo M. Gomez
-                      </div>
+                      <div className="border-bottom border-dark mx-auto" style={{ width: '180px', height: '1.5em' }} />
                       <div className="small text-muted">University Registrar</div>
                     </div>
                     <div className="col-6 text-center">
