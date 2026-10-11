@@ -1,8 +1,13 @@
+# Applies to backend/, frontend/ and admin/ (admin/.gitignore adds its own rules)
 node_modules
 .env
 .env.*
 !.env.example
 dist
+dist-ssr
+coverage
+*.tsbuildinfo
+.vercel
 .DS_Store
 AUDIT_REPORT.md
 *.log
