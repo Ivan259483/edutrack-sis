@@ -1,3 +1,4 @@
+import { FieldError } from '@/components/shared/FieldError';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
 import {
@@ -18,6 +19,7 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useAdminCollection } from '@/data/context';
+import { errorProps } from '@/lib/validation';
 import type { SystemSettings } from '@/types';
 import {
   Bell,
@@ -31,13 +33,41 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 
 export function SettingsPage() {
-  const [sharedSettings, saveSettings] = useAdminCollection('settings');
+  const [sharedSettings, , saveSettings] = useAdminCollection('settings');
   const [settings, setSettings] = useState<SystemSettings>(sharedSettings);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [yearTouched, setYearTouched] = useState(false);
+  const [serverYearError, setServerYearError] = useState('');
 
-  const handleSave = () => {
-    if (!saveSettings(settings, 'Updated academic period and system settings'))
+  // Same rule as the API: YYYY-YYYY spanning consecutive years.
+  const year = settings.academicYear.trim();
+  const yearError =
+    serverYearError ||
+    (!year
+      ? 'Academic year is required.'
+      : !/^\d{4}-\d{4}$/.test(year)
+        ? 'Use YYYY-YYYY for the academic year, e.g. 2024-2025.'
+        : Number(year.slice(5)) !== Number(year.slice(0, 4)) + 1
+          ? 'Academic year must span consecutive years, e.g. 2024-2025.'
+          : '');
+  const shownYearError = yearTouched ? yearError : '';
+
+  const handleSave = async () => {
+    if (saving) return;
+    setYearTouched(true);
+    if (yearError) return;
+    setSaving(true);
+    const result = await saveSettings(
+      { ...settings, academicYear: year },
+      'Updated academic period and system settings'
+    );
+    setSaving(false);
+    if (!result.ok) {
+      if (result.fieldErrors.academicYear) setServerYearError(result.fieldErrors.academicYear);
+      else toast.error('Settings were not saved', { description: result.message });
       return;
+    }
     setSaved(true);
     toast.success('Settings saved', {
       description: 'System settings have been updated successfully.',
@@ -60,7 +90,7 @@ export function SettingsPage() {
         description="Configure school controls and preferences. Save to apply changes across the Admin Portal."
         breadcrumbs={[{ label: 'Admin' }, { label: 'Settings' }]}
         actions={
-          <Button className="gap-2" onClick={handleSave} disabled={saved}>
+          <Button className="gap-2" onClick={() => void handleSave()} disabled={saved || saving}>
             {saved ? (
               <>
                 <Check className="h-4 w-4" />
@@ -98,9 +128,17 @@ export function SettingsPage() {
               <Input
                 id="academicYear"
                 value={settings.academicYear}
-                onChange={(e) => updateSetting('academicYear', e.target.value)}
+                maxLength={9}
+                onChange={(e) => {
+                  setServerYearError('');
+                  updateSetting('academicYear', e.target.value);
+                }}
+                onBlur={() => setYearTouched(true)}
                 placeholder="e.g. 2024-2025"
+                className={shownYearError ? 'border-destructive' : undefined}
+                {...errorProps('academic-year-error', shownYearError)}
               />
+              <FieldError id="academic-year-error" message={shownYearError} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="semester">Semester</Label>
@@ -261,7 +299,7 @@ export function SettingsPage() {
 
       {/* Save Button */}
       <div className="flex justify-end">
-        <Button className="gap-2" onClick={handleSave} disabled={saved}>
+        <Button className="gap-2" onClick={() => void handleSave()} disabled={saved || saving}>
           {saved ? (
             <>
               <Check className="h-4 w-4" />

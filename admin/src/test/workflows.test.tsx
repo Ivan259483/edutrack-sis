@@ -19,6 +19,7 @@ import { seedState } from '@/data/transitions';
 import { useAdminData } from '@/data/context';
 import type { AdminState } from '@/data/schema';
 import { leaveTo } from '@/lib/navigation';
+import { AxiosError, type AxiosResponse } from 'axios';
 
 // Leaving for the EduTrack login page is a full-page navigation; record it instead.
 vi.mock('@/lib/navigation', async (importOriginal) => ({
@@ -104,7 +105,7 @@ describe('Admin routes and workflows', () => {
     );
     const dialog = await screen.findByRole('dialog', { name: 'Add Student' });
     for (const [label, value] of [
-      ['Student ID', 'TEST-001'],
+      ['Student ID', '2026-00001'],
       ['Full name', 'Sample Test Student'],
       ['Email', 'sample@example.test'],
       ['Contact number', '09000000000'],
@@ -612,5 +613,104 @@ describe('atomic persistence and notification preferences', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Update' }));
     expect(save).not.toHaveBeenCalled();
+  });
+});
+
+describe('form validation and server field errors', () => {
+  const fill = async (
+    user: ReturnType<typeof userEvent.setup>,
+    dialog: HTMLElement,
+    values: [string, string][]
+  ) => {
+    for (const [label, value] of values) {
+      const input = within(dialog).getByLabelText(label, { exact: true });
+      await user.clear(input);
+      await user.type(input, value);
+    }
+  };
+  const validStudent: [string, string][] = [
+    ['Student ID', '2026-00002'],
+    ['Full name', 'Ma. Clara Peñaflor'],
+    ['Email', 'clara.penaflor@example.test'],
+    ['Contact number', '0917 123 4567'],
+    ['Address', 'Quezon City'],
+    ['Emergency contact', "Jose O'Neil"],
+    ['Emergency contact number', '+63 918 765 4321'],
+  ];
+
+  it('checks formats and duplicates on blur, before saving', async () => {
+    const user = userEvent.setup();
+    const repo = createLocalRepository(localStorage);
+    app('/', repo);
+    await user.click(await screen.findByRole('button', { name: 'Add Student' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Add Student' });
+    await fill(user, dialog, [
+      ['Student ID', 'ABC-1'],
+      ['Full name', 'J4ne'],
+      ['Contact number', 'call me'],
+    ]);
+    await user.click(within(dialog).getByLabelText('Address', { exact: true }));
+    expect(within(dialog).getByText('Student ID must use the format YYYY-NNNNN, e.g. 2024-00115.')).toBeTruthy();
+    expect(
+      within(dialog).getByText('Full name may only contain letters, spaces, hyphens, apostrophes and periods.')
+    ).toBeTruthy();
+    expect(within(dialog).getByText(/Enter a valid phone number for contact number/)).toBeTruthy();
+    // Another student already uses this ID and (case-insensitively) this email.
+    const taken = seedState().students[0];
+    await fill(user, dialog, [
+      ['Student ID', taken.studentId],
+      ['Email', taken.email.toUpperCase()],
+    ]);
+    await user.click(within(dialog).getByRole('button', { name: 'Save Student' }));
+    expect(within(dialog).getByText('Student ID is already in use.')).toBeTruthy();
+    expect(within(dialog).getByText('Email is already registered.')).toBeTruthy();
+    expect(repo.load()).toBeNull();
+  });
+
+  it('keeps the form open and shows the API field error when the server rejects a save', async () => {
+    const user = userEvent.setup();
+    const response = {
+      status: 409,
+      data: {
+        message: 'Email is already registered.',
+        errors: [{ field: 'email', message: 'Email is already registered.' }],
+      },
+    } as AxiosResponse;
+    const onCommit = vi.fn(() =>
+      Promise.reject(new AxiosError('Conflict', 'ERR_BAD_REQUEST', undefined, undefined, response))
+    );
+    render(
+      <MemoryRouter initialEntries={['/students']}>
+        <SessionProvider client={fakeAuth()}>
+          <AdminProvider repository={createLocalRepository(localStorage)} onCommit={onCommit}>
+            <Suspense fallback={<p>Loading…</p>}>
+              <AdminRoutes />
+            </Suspense>
+          </AdminProvider>
+        </SessionProvider>
+      </MemoryRouter>
+    );
+    await user.click(await screen.findByRole('button', { name: /Add Student/ }));
+    const dialog = await screen.findByRole('dialog', { name: 'Add Student' });
+    await fill(user, dialog, validStudent);
+    await user.click(within(dialog).getByRole('button', { name: 'Save Student' }));
+    expect(await within(dialog).findByText('Email is already registered.')).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'Add Student' })).toBeTruthy();
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    expect(onCommit.mock.calls[0]).toHaveLength(3);
+  });
+
+  it('shows the class schedule rules under the fields', async () => {
+    const user = userEvent.setup();
+    app('/schedules');
+    await user.click(await screen.findByRole('button', { name: 'Add Class' }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Start Time'), { target: { value: '06:30' } });
+    fireEvent.change(within(dialog).getByLabelText('End Time'), { target: { value: '08:00' } });
+    await user.type(within(dialog).getByLabelText('Room'), 'Rm <401>');
+    await user.click(within(dialog).getByRole('button', { name: 'Save Schedule' }));
+    expect(within(dialog).getByText('Subject is required.')).toBeTruthy();
+    expect(within(dialog).getByText('Classes must be within 07:00–18:00.')).toBeTruthy();
+    expect(within(dialog).getByText(/Room may only contain letters/)).toBeTruthy();
   });
 });

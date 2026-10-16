@@ -68,28 +68,33 @@ export function RemoteAdminProvider({ children }: { children: ReactNode }) {
   }, [initial, refresh]);
 
   // Saves are sent in order; if the server rejects one, reload the truth.
+  // A quiet save (a form waiting for the answer) gets the error back instead of a toast.
   const onCommit = useCallback(
-    (previous: AdminState, next: AdminState) => {
+    (previous: AdminState, next: AdminState, options?: { quiet: boolean }) => {
       const requests = diffRequests(previous, next);
       if (!requests.length) return;
       commits.current += 1;
       pending.current += 1;
-      queue.current = queue.current.then(async () => {
+      const run = queue.current.then(async () => {
         try {
           for (const request of requests) await api.request(request);
         } catch (cause) {
-          toast.error('Change was not saved to the server', {
-            description: apiErrorMessage(cause),
-          });
+          if (!options?.quiet)
+            toast.error('Change was not saved to the server', {
+              description: apiErrorMessage(cause),
+            });
           try {
             setSnapshot(await fetchAdminState());
           } catch {
             /* Server unreachable; the periodic refresh retries. */
           }
+          if (options?.quiet) throw cause;
         } finally {
           pending.current -= 1;
         }
       });
+      queue.current = run.catch(() => {});
+      return run;
     },
     []
   );

@@ -141,11 +141,11 @@ describe('authentication & security', () => {
 
   it('changes a password with the current one', async () => {
     const token = await login('pedro.santos@university.edu', 'Student123!');
-    const bad = await call('PUT', '/auth/password', { token, body: { currentPassword: 'wrong', password: 'NewPass123' } });
+    const bad = await call('PUT', '/auth/password', { token, body: { currentPassword: 'wrong', password: 'NewPass123!' } });
     assert.equal(bad.status, 400);
-    const ok = await call('PUT', '/auth/password', { token, body: { currentPassword: 'Student123!', password: 'NewPass123' } });
+    const ok = await call('PUT', '/auth/password', { token, body: { currentPassword: 'Student123!', password: 'NewPass123!' } });
     assert.equal(ok.status, 200);
-    assert.ok(await login('pedro.santos@university.edu', 'NewPass123'));
+    assert.ok(await login('pedro.santos@university.edu', 'NewPass123!'));
   });
 });
 

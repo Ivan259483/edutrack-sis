@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { FaHeadset, FaPaperPlane, FaPlus, FaTicketAlt } from 'react-icons/fa';
 import AppLayout from '../components/layout/AppLayout';
 import { Empty, LoadError, Loading } from '../components/PageState';
 import API, { errorMessage } from '../services/api';
 import useApi from '../services/useApi';
 import { formatDate } from '../services/academic';
+import { apiFieldErrors, lengthBetween, onlyErrors } from '../services/validation';
 
 const CATEGORIES = ['Enrollment', 'Grades', 'Technical', 'General'];
 const STATUS_BADGE = { Open: 'bg-danger', 'In Progress': 'bg-warning text-dark', Resolved: 'bg-success' };
@@ -16,14 +17,26 @@ const StudentSupport = () => {
   const [selectedId, setSelectedId] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
-  const [touched, setTouched] = useState(false);
+  // Fields the student has left (blur) or tried to submit.
+  const [touched, setTouched] = useState({});
   const [reply, setReply] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [serverErrors, setServerErrors] = useState({});
+  const submitting = useRef(false);
 
+  // Same limits as the API (portalTicketRules).
   const errors = {
-    subject: form.subject.trim().length < 5 ? 'Subject must be at least 5 characters.' : '',
-    message: form.message.trim().length < 10 ? 'Please describe your concern (at least 10 characters).' : '',
+    ...onlyErrors({
+      subject: lengthBetween(form.subject, 'Subject', 5, 200),
+      message: lengthBetween(form.message, 'Message', 10, 5000),
+    }),
+    ...onlyErrors(serverErrors),
+  };
+  const shown = (name) => (touched[name] ? errors[name] : '');
+  const edit = (name, value) => {
+    setForm((prev) => ({ ...prev, [name]: value }));
+    if (serverErrors[name]) setServerErrors((prev) => ({ ...prev, [name]: '' }));
   };
   const selected = tickets.data.find((t) => t.id === selectedId) || null;
 
@@ -32,8 +45,10 @@ const StudentSupport = () => {
 
   const handleCreate = async (e) => {
     e.preventDefault();
-    setTouched(true);
+    if (submitting.current) return;
+    setTouched({ subject: true, message: true });
     if (errors.subject || errors.message) return;
+    submitting.current = true;
     setSaving(true);
     setError('');
     try {
@@ -45,18 +60,22 @@ const StudentSupport = () => {
       replaceTicket(data);
       setSelectedId(data.id);
       setForm(emptyForm);
-      setTouched(false);
+      setTouched({});
       setShowForm(false);
     } catch (err) {
-      setError(errorMessage(err));
+      const fieldErrors = apiFieldErrors(err);
+      setServerErrors(fieldErrors);
+      if (!Object.keys(fieldErrors).length) setError(errorMessage(err));
     } finally {
+      submitting.current = false;
       setSaving(false);
     }
   };
 
   const handleReply = async (e) => {
     e.preventDefault();
-    if (!reply.trim()) return;
+    if (!reply.trim() || submitting.current) return;
+    submitting.current = true;
     setSaving(true);
     setError('');
     try {
@@ -68,6 +87,7 @@ const StudentSupport = () => {
     } catch (err) {
       setError(errorMessage(err));
     } finally {
+      submitting.current = false;
       setSaving(false);
     }
   };
@@ -108,7 +128,7 @@ const StudentSupport = () => {
                 id="ticket-category"
                 className="form-select"
                 value={form.category}
-                onChange={(e) => setForm({ ...form, category: e.target.value })}
+                onChange={(e) => edit('category', e.target.value)}
               >
                 {CATEGORIES.map((c) => (
                   <option key={c}>{c}</option>
@@ -119,24 +139,30 @@ const StudentSupport = () => {
               <label className="form-label small text-muted" htmlFor="ticket-subject">Subject</label>
               <input
                 id="ticket-subject"
-                className={`form-control ${touched && errors.subject ? 'is-invalid' : ''}`}
+                className={`form-control ${shown('subject') ? 'is-invalid' : ''}`}
                 value={form.subject}
                 maxLength={200}
-                onChange={(e) => setForm({ ...form, subject: e.target.value })}
+                onChange={(e) => edit('subject', e.target.value)}
+                onBlur={() => setTouched((prev) => ({ ...prev, subject: true }))}
+                aria-invalid={Boolean(shown('subject'))}
+                aria-describedby={shown('subject') ? 'ticket-subject-error' : undefined}
               />
-              <div className="invalid-feedback">{errors.subject}</div>
+              <div id="ticket-subject-error" className="invalid-feedback">{shown('subject')}</div>
             </div>
             <div className="col-12">
               <label className="form-label small text-muted" htmlFor="ticket-message">Message</label>
               <textarea
                 id="ticket-message"
                 rows={4}
-                className={`form-control ${touched && errors.message ? 'is-invalid' : ''}`}
+                className={`form-control ${shown('message') ? 'is-invalid' : ''}`}
                 value={form.message}
                 maxLength={5000}
-                onChange={(e) => setForm({ ...form, message: e.target.value })}
+                onChange={(e) => edit('message', e.target.value)}
+                onBlur={() => setTouched((prev) => ({ ...prev, message: true }))}
+                aria-invalid={Boolean(shown('message'))}
+                aria-describedby={shown('message') ? 'ticket-message-error' : undefined}
               />
-              <div className="invalid-feedback">{errors.message}</div>
+              <div id="ticket-message-error" className="invalid-feedback">{shown('message')}</div>
             </div>
           </div>
           <div className="d-flex gap-2 mt-3">

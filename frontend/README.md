@@ -86,6 +86,8 @@ choice is passed on to the Admin Portal (`#token=…&remember=0`).
 
 ## Notes
 
-- There is no password-reset page yet; students change their password on My Profile.
+- **Forgot password?** on the login page (both tabs) opens `/forgot-password`: email or Student ID,
+  then the 6-digit emailed code and a new password. Signed-in students can also change it on My Profile.
+- Form rules live in `src/services/validation.js` and mirror the API (`backend/validators/index.js`).
 - Notification read/dismissed flags are stored per browser (`localStorage`); the notifications
   themselves come from the API.

@@ -29,6 +29,14 @@ export const tokenStore = {
       /* Session lasts for this page only if storage is blocked. */
     }
   },
+  /** Swaps in a new token wherever the current one is kept (after a password change). */
+  replace(token: string) {
+    try {
+      this.set(token, localStorage.getItem(TOKEN_KEY) !== null);
+    } catch {
+      /* Session lasts for this page only if storage is blocked. */
+    }
+  },
   clear() {
     try {
       localStorage.removeItem(TOKEN_KEY);
@@ -68,4 +76,15 @@ export function apiErrorMessage(error: unknown): string {
     return `Request failed (${error.response.status}).`;
   }
   return error instanceof Error ? error.message : 'Unexpected error.';
+}
+
+// Field messages from an API error ({ errors: [{ field, message }] }), keyed by field.
+export function apiFieldErrors(error: unknown): Record<string, string> {
+  if (!(error instanceof AxiosError)) return {};
+  const errors = (
+    error.response?.data as
+      | { errors?: { field: string; message: string }[] }
+      | undefined
+  )?.errors;
+  return Object.fromEntries((errors ?? []).map((e) => [e.field, e.message]));
 }

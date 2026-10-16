@@ -14,6 +14,10 @@ export const protect = async (req, res, next) => {
     if (!user) {
       return res.status(401).json({ message: 'Account no longer exists. Please sign in again.' });
     }
+    // The password was reset or changed after this token was issued.
+    if ((decoded.tv ?? 0) !== (user.tokenVersion ?? 0)) {
+      return res.status(401).json({ message: 'Your password was changed. Please sign in again.' });
+    }
     req.user = user;
     next();
   } catch {

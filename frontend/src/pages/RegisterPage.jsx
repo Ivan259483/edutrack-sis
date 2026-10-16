@@ -1,6 +1,22 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import API from '../services/api';
+import FieldError from '../components/form/FieldError';
+import PasswordChecklist from '../components/form/PasswordChecklist';
+import API, { errorMessage } from '../services/api';
+import {
+  apiFieldErrors,
+  clean,
+  confirmPassword,
+  digitsCode,
+  email as emailRule,
+  onlyErrors,
+  personName,
+  REGISTRATION_CODE_LENGTH,
+  RESEND_SECONDS,
+  strongPassword,
+} from '../services/validation';
+
+const DETAIL_FIELDS = ['firstName', 'lastName', 'email', 'password', 'confirmPassword', 'program', 'yearLevel'];
 
 const RegisterPage = () => {
   const navigate = useNavigate();
@@ -24,9 +40,13 @@ const RegisterPage = () => {
 
   // OTP State
   const [enteredOtp, setEnteredOtp] = useState('');
+  const [otpTouched, setOtpTouched] = useState(false);
   const [loading, setLoading] = useState(false);
   const [serverError, setServerError] = useState('');
+  // Field messages returned by the API (e.g. "Email is already registered.").
+  const [serverFieldErrors, setServerFieldErrors] = useState({});
   const [resendCooldown, setResendCooldown] = useState(0);
+  const submitting = useRef(false);
 
   // Cooldown countdown timer for OTP resend
   useEffect(() => {
@@ -39,28 +59,29 @@ const RegisterPage = () => {
     return () => clearInterval(timer);
   }, [resendCooldown]);
 
-  // Real-time Validation Rules
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-  const isFirstNameValid = formData.firstName.trim().length >= 2;
-  const isLastNameValid = formData.lastName.trim().length >= 2;
-  const isEmailValid = emailRegex.test(formData.email.trim());
-  const isPasswordValid =
-    formData.password.length >= 8 && /[A-Za-z]/.test(formData.password) && /\d/.test(formData.password);
-  const isConfirmPasswordValid =
-    formData.confirmPassword.length > 0 &&
-    formData.confirmPassword === formData.password;
-
-  const isFormValid =
-    isFirstNameValid &&
-    isLastNameValid &&
-    isEmailValid &&
-    isPasswordValid &&
-    isConfirmPasswordValid;
+  // Real-time Validation Rules (the API enforces the same ones)
+  const errors = {
+    ...onlyErrors({
+      firstName: personName(formData.firstName, 'First name'),
+      lastName: personName(formData.lastName, 'Last name'),
+      email: emailRule(formData.email),
+      password: strongPassword(formData.password),
+      confirmPassword: confirmPassword(formData.confirmPassword, formData.password),
+    }),
+    ...onlyErrors(serverFieldErrors),
+  };
+  const isFirstNameValid = !errors.firstName;
+  const isLastNameValid = !errors.lastName;
+  const isEmailValid = !errors.email;
+  const isPasswordValid = !errors.password;
+  const isConfirmPasswordValid = !errors.confirmPassword;
+  const isFormValid = DETAIL_FIELDS.every((field) => !errors[field]);
+  const otpError = serverFieldErrors.otp || digitsCode(enteredOtp, REGISTRATION_CODE_LENGTH);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-    setTouched((prev) => ({ ...prev, [name]: true }));
+    if (serverFieldErrors[name]) setServerFieldErrors((prev) => ({ ...prev, [name]: '' }));
     if (serverError) setServerError('');
   };
 
@@ -75,97 +96,104 @@ const RegisterPage = () => {
     return isValid ? '1px solid #22c55e' : '1px solid #ef4444';
   };
 
+  // One request at a time (no double submits).
+  const once = async (work) => {
+    if (submitting.current) return;
+    submitting.current = true;
+    setLoading(true);
+    setServerError('');
+    try {
+      await work();
+    } finally {
+      submitting.current = false;
+      setLoading(false);
+    }
+  };
+
+  // Shows API field errors under their fields (back on step 1 if they belong there).
+  const showApiError = (err, fallback) => {
+    // Rate limits say how long to wait; count the resend button down from it.
+    const retryAfter = err.response?.data?.retryAfter;
+    if (retryAfter) setResendCooldown(retryAfter);
+    const fieldErrors = apiFieldErrors(err);
+    if (!Object.keys(fieldErrors).length) {
+      setServerError(errorMessage(err, fallback));
+      return;
+    }
+    setServerFieldErrors(fieldErrors);
+    if (DETAIL_FIELDS.some((field) => fieldErrors[field])) {
+      setTouched(Object.fromEntries(DETAIL_FIELDS.map((field) => [field, true])));
+      setStep(1);
+    } else {
+      setOtpTouched(true);
+    }
+  };
+
+  const email = () => formData.email.trim().toLowerCase();
+
   // STEP 1: Request OTP from backend email service
-  const handleSendOtp = async (e) => {
+  const handleSendOtp = (e) => {
     e.preventDefault();
     setServerError('');
 
     if (!isFormValid) {
-      setTouched({
-        firstName: true,
-        lastName: true,
-        email: true,
-        password: true,
-        confirmPassword: true,
-      });
+      setTouched(Object.fromEntries(DETAIL_FIELDS.map((field) => [field, true])));
       return;
     }
 
-    setLoading(true);
-
-    try {
-      await API.post('/auth/send-otp', {
-        email: formData.email.trim(),
-      });
-
-      setLoading(false);
-      setStep(2);
-      setResendCooldown(60); // 60 seconds cooldown
-    } catch (err) {
-      setLoading(false);
-      setServerError(
-        err.response?.data?.message || 'Failed to send verification code. Please try again.'
-      );
-    }
+    once(async () => {
+      try {
+        await API.post('/auth/send-otp', { email: email() });
+        setStep(2);
+        setResendCooldown(RESEND_SECONDS);
+      } catch (err) {
+        showApiError(err, 'Failed to send verification code. Please try again.');
+      }
+    });
   };
 
   // Resend OTP handler
-  const handleResendOtp = async () => {
-    if (resendCooldown > 0 || loading) return;
-    setServerError('');
-    setLoading(true);
-
-    try {
-      await API.post('/auth/send-otp', {
-        email: formData.email.trim(),
-      });
-      setLoading(false);
-      setResendCooldown(60);
-    } catch (err) {
-      setLoading(false);
-      setServerError(
-        err.response?.data?.message || 'Failed to resend code. Please try again.'
-      );
-    }
+  const handleResendOtp = () => {
+    if (resendCooldown > 0) return;
+    once(async () => {
+      try {
+        await API.post('/auth/send-otp', { email: email() });
+        setResendCooldown(RESEND_SECONDS);
+        setServerFieldErrors({});
+      } catch (err) {
+        showApiError(err, 'Failed to resend code. Please try again.');
+      }
+    });
   };
 
   // STEP 2: Verify OTP & Register Account
-  const handleVerifyOtpAndRegister = async (e) => {
+  const handleVerifyOtpAndRegister = (e) => {
     e.preventDefault();
     setServerError('');
+    setOtpTouched(true);
+    if (otpError) return;
 
-    if (enteredOtp.trim().length !== 5) {
-      setServerError('Please enter the full 5-digit verification code.');
-      return;
-    }
+    once(async () => {
+      try {
+        // 1. Verify OTP with backend
+        await API.post('/auth/verify-otp', { email: email(), otp: enteredOtp.trim() });
 
-    setLoading(true);
+        // 2. Complete Registration
+        await API.post('/auth/register', {
+          firstName: clean(formData.firstName),
+          lastName: clean(formData.lastName),
+          email: email(),
+          password: formData.password,
+          confirmPassword: formData.confirmPassword,
+          program: formData.program,
+          yearLevel: formData.yearLevel,
+        });
 
-    try {
-      // 1. Verify OTP with backend
-      await API.post('/auth/verify-otp', {
-        email: formData.email.trim(),
-        otp: enteredOtp.trim(),
-      });
-
-      // 2. Complete Registration
-      await API.post('/auth/register', {
-        firstName: formData.firstName.trim(),
-        lastName: formData.lastName.trim(),
-        email: formData.email.trim(),
-        password: formData.password,
-        program: formData.program,
-        yearLevel: formData.yearLevel,
-      });
-
-      setLoading(false);
-      setStep(3);
-    } catch (err) {
-      setLoading(false);
-      setServerError(
-        err.response?.data?.message || 'Verification or registration failed. Please try again.'
-      );
-    }
+        setStep(3);
+      } catch (err) {
+        showApiError(err, 'Verification or registration failed. Please try again.');
+      }
+    });
   };
 
   return (
@@ -239,6 +267,9 @@ const RegisterPage = () => {
                       value={formData.firstName}
                       onChange={handleChange}
                       onBlur={handleBlur}
+                      maxLength={50}
+                      autoComplete="given-name"
+                      aria-invalid={Boolean(touched.firstName && errors.firstName)}
                       required
                     />
                     {touched.firstName && (
@@ -246,7 +277,7 @@ const RegisterPage = () => {
                         className="small d-block mt-1"
                         style={{ fontSize: '11px', color: isFirstNameValid ? '#22c55e' : '#ef4444' }}
                       >
-                        {isFirstNameValid ? 'Valid first name' : 'Minimum 2 characters required'}
+                        {isFirstNameValid ? 'Valid first name' : errors.firstName}
                       </span>
                     )}
                   </div>
@@ -262,6 +293,9 @@ const RegisterPage = () => {
                       value={formData.lastName}
                       onChange={handleChange}
                       onBlur={handleBlur}
+                      maxLength={50}
+                      autoComplete="family-name"
+                      aria-invalid={Boolean(touched.lastName && errors.lastName)}
                       required
                     />
                     {touched.lastName && (
@@ -269,7 +303,7 @@ const RegisterPage = () => {
                         className="small d-block mt-1"
                         style={{ fontSize: '11px', color: isLastNameValid ? '#22c55e' : '#ef4444' }}
                       >
-                        {isLastNameValid ? 'Valid last name' : 'Minimum 2 characters required'}
+                        {isLastNameValid ? 'Valid last name' : errors.lastName}
                       </span>
                     )}
                   </div>
@@ -321,6 +355,9 @@ const RegisterPage = () => {
                     value={formData.email}
                     onChange={handleChange}
                     onBlur={handleBlur}
+                    maxLength={254}
+                    autoComplete="email"
+                    aria-invalid={Boolean(touched.email && errors.email)}
                     required
                   />
                   {touched.email && (
@@ -328,7 +365,7 @@ const RegisterPage = () => {
                       className="small d-block mt-1"
                       style={{ fontSize: '11px', color: isEmailValid ? '#22c55e' : '#ef4444' }}
                     >
-                      {isEmailValid ? 'Valid email format' : 'Please enter a valid email address'}
+                      {isEmailValid ? 'Valid email format' : errors.email}
                     </span>
                   )}
                 </div>
@@ -342,10 +379,14 @@ const RegisterPage = () => {
                       name="password"
                       className="form-control bg-dark text-white py-2"
                       style={{ border: getFieldBorder('password', isPasswordValid) }}
-                      placeholder="Min 8 characters, letters & numbers"
+                      placeholder="Create a strong password"
                       value={formData.password}
                       onChange={handleChange}
                       onBlur={handleBlur}
+                      maxLength={128}
+                      autoComplete="new-password"
+                      aria-invalid={Boolean(touched.password && errors.password)}
+                      aria-describedby="register-password-rules"
                       required
                     />
                     {touched.password && (
@@ -353,9 +394,10 @@ const RegisterPage = () => {
                         className="small d-block mt-1"
                         style={{ fontSize: '11px', color: isPasswordValid ? '#22c55e' : '#ef4444' }}
                       >
-                        {isPasswordValid ? 'Password meets requirements' : 'At least 8 characters with a letter and a number'}
+                        {isPasswordValid ? 'Password meets requirements' : 'Password does not meet all requirements'}
                       </span>
                     )}
+                    <PasswordChecklist id="register-password-rules" password={formData.password} dark />
                   </div>
 
                   <div className="col-sm-6">
@@ -369,6 +411,9 @@ const RegisterPage = () => {
                       value={formData.confirmPassword}
                       onChange={handleChange}
                       onBlur={handleBlur}
+                      maxLength={128}
+                      autoComplete="new-password"
+                      aria-invalid={Boolean(touched.confirmPassword && errors.confirmPassword)}
                       required
                     />
                     {touched.confirmPassword && (
@@ -376,7 +421,7 @@ const RegisterPage = () => {
                         className="small d-block mt-1"
                         style={{ fontSize: '11px', color: isConfirmPasswordValid ? '#22c55e' : '#ef4444' }}
                       >
-                        {isConfirmPasswordValid ? 'Passwords match' : 'Passwords do not match'}
+                        {isConfirmPasswordValid ? 'Passwords match' : errors.confirmPassword}
                       </span>
                     )}
                   </div>
@@ -386,12 +431,7 @@ const RegisterPage = () => {
                 <button
                   type="submit"
                   className="btn btn-primary w-100 py-2 fw-semibold rounded-3 shadow-sm mb-3"
-                  disabled={loading || !isFormValid}
-                  style={{
-                    backgroundColor: isFormValid ? '#2563eb' : '#334155',
-                    borderColor: isFormValid ? '#2563eb' : '#334155',
-                    cursor: isFormValid ? 'pointer' : 'not-allowed',
-                  }}
+                  disabled={loading}
                 >
                   {loading ? 'Sending Verification Code...' : 'Send Verification Code to Email'}
                 </button>
@@ -407,11 +447,11 @@ const RegisterPage = () => {
 
             {/* STEP 2: Email Verification Code Entry */}
             {step === 2 && (
-              <form onSubmit={handleVerifyOtpAndRegister}>
+              <form onSubmit={handleVerifyOtpAndRegister} noValidate>
                 <div className="text-center mb-4">
                   <h5 className="fw-bold text-white mb-2">Check Your Email</h5>
                   <p className="text-secondary small mb-2">
-                    A 5-digit verification code has been dispatched to:
+                    A {REGISTRATION_CODE_LENGTH}-digit verification code has been dispatched to:
                   </p>
                   <div
                     className="p-2 rounded-3 text-white fw-semibold small d-inline-block"
@@ -425,26 +465,38 @@ const RegisterPage = () => {
                 </div>
 
                 <div className="mb-4">
-                  <label className="form-label text-light small text-center d-block fw-medium">
-                    Enter 5-Digit Verification Code
+                  <label className="form-label text-light small text-center d-block fw-medium" htmlFor="register-otp">
+                    Enter {REGISTRATION_CODE_LENGTH}-Digit Verification Code
                   </label>
                   <input
+                    id="register-otp"
                     type="text"
-                    maxLength="5"
-                    className="form-control bg-dark border-secondary text-white text-center fs-3 font-monospace py-2"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={REGISTRATION_CODE_LENGTH}
+                    className={`form-control bg-dark ${otpTouched && otpError ? 'border-danger' : 'border-secondary'} text-white text-center fs-3 font-monospace py-2`}
                     style={{ letterSpacing: '8px' }}
-                    placeholder="00000"
+                    placeholder={'0'.repeat(REGISTRATION_CODE_LENGTH)}
                     value={enteredOtp}
-                    onChange={(e) => setEnteredOtp(e.target.value.replace(/\D/g, ''))}
+                    onChange={(e) => {
+                      setEnteredOtp(e.target.value.replace(/\D/g, ''));
+                      if (serverFieldErrors.otp) setServerFieldErrors((prev) => ({ ...prev, otp: '' }));
+                    }}
+                    onBlur={() => setOtpTouched(true)}
+                    aria-invalid={Boolean(otpTouched && otpError)}
+                    aria-describedby={otpTouched && otpError ? 'register-otp-error' : undefined}
                     required
                     autoFocus
                   />
+                  <div className="text-center">
+                    <FieldError id="register-otp-error" message={otpTouched ? otpError : ''} />
+                  </div>
                 </div>
 
                 <button
                   type="submit"
                   className="btn btn-primary w-100 py-2 fw-semibold rounded-3 shadow-sm mb-3"
-                  disabled={loading || enteredOtp.length !== 5}
+                  disabled={loading}
                 >
                   {loading ? 'Verifying & Registering...' : 'Verify Code & Complete Registration'}
                 </button>
@@ -456,7 +508,9 @@ const RegisterPage = () => {
                     onClick={() => {
                       setStep(1);
                       setEnteredOtp('');
+                      setOtpTouched(false);
                       setServerError('');
+                      setServerFieldErrors({});
                     }}
                   >
                     Change Email

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import API, { AUTH_EXPIRED_EVENT, errorMessage } from '../services/api';
+import { apiFieldErrors } from '../services/validation';
 import { openAdminPortal } from '../services/session';
 import { clearSession, readSession, writeSession } from '../services/storage';
 import { AuthContext } from './auth-context';
@@ -61,9 +62,19 @@ export const AuthProvider = ({ children }) => {
       }
       return { success: true, user: receivedUser };
     } catch (error) {
-      return { success: false, message: errorMessage(error, 'Login failed. Please check your credentials.') };
+      return {
+        success: false,
+        message: errorMessage(error, 'Login failed. Please check your credentials.'),
+        errors: apiFieldErrors(error),
+      };
     }
   };
+
+  // Changing the password signs out other sessions; keep this one with its new token.
+  const replaceToken = useCallback((receivedToken) => {
+    setToken(receivedToken);
+    writeSession('edutrack_token', receivedToken);
+  }, []);
 
   // Refresh the stored profile after it changes on the server.
   const refreshUser = useCallback(async () => {
@@ -73,7 +84,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, logout, saveSession, refreshUser }}>
+    <AuthContext.Provider value={{ user, token, loading, login, logout, saveSession, replaceToken, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
