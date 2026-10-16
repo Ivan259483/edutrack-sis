@@ -1,7 +1,9 @@
-import { useState, useContext, useEffect } from 'react';
-import { useNavigate, Link, useSearchParams } from 'react-router-dom';
+import { useState, useContext, useEffect, useRef } from 'react';
+import { useNavigate, Link, useLocation, useSearchParams } from 'react-router-dom';
 import { AuthContext } from '../context/auth-context';
 import { FaGraduationCap, FaShieldAlt, FaEye, FaEyeSlash, FaBolt, FaLock } from 'react-icons/fa';
+import FieldError from '../components/form/FieldError';
+import { onlyErrors } from '../services/validation';
 
 // Seeded demo accounts for the local demo only. Vite turns this into `null` in
 // production builds, so the passwords are not shipped.
@@ -28,6 +30,25 @@ const LoginPage = () => {
   // Status State
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
+  const submitting = useRef(false);
+  // Shown after a password reset ("Your password has been reset...").
+  const location = useLocation();
+  const [notice, setNotice] = useState(location.state?.notice || '');
+
+  // Both fields are required; password strength is not checked here so older
+  // accounts can still sign in.
+  const validate = (values = { identifier: email, password }) =>
+    onlyErrors({
+      identifier: values.identifier.trim()
+        ? ''
+        : role === 'student'
+          ? 'Enter your email or Student ID.'
+          : 'Enter your administrator email.',
+      password: values.password ? '' : 'Enter your password.',
+    });
+  const checkField = (name) => setFieldErrors((prev) => ({ ...prev, [name]: validate()[name] || '' }));
+  const fieldBorder = (name) => (fieldErrors[name] ? '#ef4444' : undefined);
 
   // If already logged in, redirect immediately to the student portal
   useEffect(() => {
@@ -39,14 +60,24 @@ const LoginPage = () => {
   // Handle Form Submission
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitting.current) return; // no double submits
     setError('');
+    setNotice('');
+    const errors = validate();
+    setFieldErrors(errors);
+    if (Object.keys(errors).length) return;
+    submitting.current = true;
     setLoading(true);
 
     const result = await login(email.trim(), password, role, rememberMe);
 
     if (!result.success) {
+      submitting.current = false;
       setLoading(false);
-      setError(result.message);
+      setFieldErrors(result.errors || {});
+      // Field problems show under the fields; everything else (wrong credentials,
+      // too many attempts) in the banner.
+      if (!Object.keys(result.errors || {}).length) setError(result.message);
     } else if (result.user.role === 'student') {
       navigate('/student/dashboard', { replace: true });
     }
@@ -59,6 +90,7 @@ const LoginPage = () => {
     setEmail(DEMO_ACCOUNTS[demoRole].identifier);
     setPassword(DEMO_ACCOUNTS[demoRole].password);
     setError('');
+    setFieldErrors({});
   };
 
   return (
@@ -100,6 +132,7 @@ const LoginPage = () => {
                 onClick={() => {
                   setRole('student');
                   setError('');
+                  setFieldErrors({});
                 }}
               >
                 <FaGraduationCap /> Student
@@ -114,6 +147,7 @@ const LoginPage = () => {
                 onClick={() => {
                   setRole('admin');
                   setError('');
+                  setFieldErrors({});
                 }}
               >
                 <FaShieldAlt /> Administrator
@@ -130,8 +164,19 @@ const LoginPage = () => {
               </div>
             )}
 
+            {/* Success Message (e.g. after a password reset) */}
+            {notice && (
+              <div
+                className="alert py-2 small mb-3 border-0 rounded-3 text-center"
+                style={{ backgroundColor: 'rgba(34, 197, 94, 0.15)', color: '#4ade80' }}
+                role="status"
+              >
+                {notice}
+              </div>
+            )}
+
             {/* Form */}
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} noValidate>
               {/* Email Input (No Student ID) */}
               <div className="mb-3">
                 <label className="form-label text-light small fw-medium" htmlFor="login-identifier">
@@ -144,9 +189,18 @@ const LoginPage = () => {
                   className="form-control bg-dark border-secondary text-white py-2"
                   placeholder={role === 'student' ? 'e.g. juan.delacruz@edutrack.edu' : 'e.g. admin@edutrack.edu'}
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (fieldErrors.identifier) setFieldErrors((prev) => ({ ...prev, identifier: '' }));
+                  }}
+                  onBlur={() => checkField('identifier')}
+                  style={{ borderColor: fieldBorder('identifier') }}
+                  aria-invalid={Boolean(fieldErrors.identifier)}
+                  aria-describedby={fieldErrors.identifier ? 'login-identifier-error' : undefined}
+                  maxLength={254}
                   required
                 />
+                <FieldError id="login-identifier-error" message={fieldErrors.identifier} />
               </div>
 
               {/* Password Input */}
@@ -160,7 +214,15 @@ const LoginPage = () => {
                     className="form-control bg-dark border-secondary text-white py-2"
                     placeholder="Enter password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (fieldErrors.password) setFieldErrors((prev) => ({ ...prev, password: '' }));
+                    }}
+                    onBlur={() => checkField('password')}
+                    style={{ borderColor: fieldBorder('password') }}
+                    aria-invalid={Boolean(fieldErrors.password)}
+                    aria-describedby={fieldErrors.password ? 'login-password-error' : undefined}
+                    maxLength={128}
                     required
                   />
                   <button
@@ -175,10 +237,11 @@ const LoginPage = () => {
                     {showPassword ? <FaEyeSlash size={16} aria-hidden="true" /> : <FaEye size={16} aria-hidden="true" />}
                   </button>
                 </div>
+                <FieldError id="login-password-error" message={fieldErrors.password} />
               </div>
 
               {/* Options Row */}
-              <div className="d-flex align-items-center mb-4 small">
+              <div className="d-flex align-items-center justify-content-between mb-4 small">
                 <div className="form-check">
                   <input
                     className="form-check-input bg-dark border-secondary"
@@ -191,6 +254,12 @@ const LoginPage = () => {
                     Remember Me
                   </label>
                 </div>
+                <Link
+                  to={`/forgot-password?role=${role}`}
+                  className="text-primary text-decoration-none fw-semibold"
+                >
+                  Forgot password?
+                </Link>
               </div>
 
               {/* Sign In Button */}

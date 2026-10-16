@@ -1,59 +1,78 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { FaSave } from 'react-icons/fa';
 import API, { errorMessage } from '../services/api';
-
-// Same rules as the API (backend/validators/index.js portalProfileRules).
-const PHONE = /^\+?[0-9][0-9 ()-]{6,24}$/;
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+import {
+  apiFieldErrors,
+  clean,
+  email,
+  lengthBetween,
+  NAME_PATTERN,
+  onlyErrors,
+  personName,
+  phone,
+} from '../services/validation';
 
 const FIELDS = [
-  { name: 'contactNumber', label: 'Mobile Number', type: 'tel', required: true },
-  { name: 'personalEmail', label: 'Personal Email (optional)', type: 'email' },
-  { name: 'address', label: 'Residential Address', type: 'text', required: true, wide: true },
-  { name: 'emergencyContact', label: 'Emergency Contact Person', type: 'text', required: true },
-  { name: 'guardianRelationship', label: 'Relationship (optional)', type: 'text' },
-  { name: 'emergencyContactNumber', label: 'Emergency Contact Number', type: 'tel', required: true },
+  { name: 'contactNumber', label: 'Mobile Number', type: 'tel', max: 30, autoComplete: 'tel' },
+  { name: 'personalEmail', label: 'Personal Email (optional)', type: 'email', max: 254, autoComplete: 'email' },
+  { name: 'address', label: 'Residential Address', type: 'text', wide: true, max: 300, autoComplete: 'street-address' },
+  { name: 'emergencyContact', label: 'Emergency Contact Person', type: 'text', max: 100 },
+  { name: 'guardianRelationship', label: 'Relationship (optional)', type: 'text', max: 60 },
+  { name: 'emergencyContactNumber', label: 'Emergency Contact Number', type: 'tel', max: 30 },
 ];
 
 // "Not provided" is the placeholder stored for new registrations.
 const initialValue = (value) => (value && value !== 'Not provided' ? value : '');
 
-const validateContact = (form) => {
-  const errors = {};
-  for (const field of FIELDS) {
-    if (field.required && !form[field.name].trim()) errors[field.name] = `${field.label} is required.`;
-  }
-  for (const name of ['contactNumber', 'emergencyContactNumber']) {
-    if (!errors[name] && !PHONE.test(form[name].trim())) errors[name] = 'Enter a valid phone number (digits, spaces, +, - or parentheses).';
-  }
-  if (form.personalEmail.trim() && !EMAIL.test(form.personalEmail.trim())) errors.personalEmail = 'Enter a valid email address.';
-  if (form.address.trim().length > 300) errors.address = 'Address must be at most 300 characters.';
-  return errors;
+const relationship = (value) => {
+  const v = clean(value);
+  if (!v) return '';
+  if (v.length < 2 || v.length > 60) return 'Relationship must be 2–60 characters.';
+  return NAME_PATTERN.test(v) ? '' : 'Relationship may only contain letters, spaces, hyphens, apostrophes and periods.';
 };
+
+// Same rules as the API (backend/validators/index.js portalProfileRules).
+const validateContact = (form) =>
+  onlyErrors({
+    contactNumber: phone(form.contactNumber, 'Mobile number'),
+    personalEmail: form.personalEmail.trim() ? email(form.personalEmail, 'Personal email') : '',
+    address: lengthBetween(form.address, 'Address', 5, 300),
+    emergencyContact: personName(form.emergencyContact, 'Emergency contact', 100),
+    guardianRelationship: relationship(form.guardianRelationship),
+    emergencyContactNumber: phone(form.emergencyContactNumber, 'Emergency contact number'),
+  });
 
 // Lets a student update their own contact details (PUT /api/portal/profile).
 const EditContactForm = ({ student, onSaved, onCancel }) => {
   const [form, setForm] = useState(() =>
     Object.fromEntries(FIELDS.map((f) => [f.name, initialValue(student[f.name])]))
   );
-  const [touched, setTouched] = useState(false);
+  // Fields the student has left (blur) or tried to submit.
+  const [touched, setTouched] = useState({});
   const [saving, setSaving] = useState(false);
   const [serverError, setServerError] = useState('');
-  const errors = validateContact(form);
+  const [serverFieldErrors, setServerFieldErrors] = useState({});
+  const submitting = useRef(false);
+  const errors = { ...validateContact(form), ...onlyErrors(serverFieldErrors) };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setTouched(true);
+    if (submitting.current) return;
+    setTouched(Object.fromEntries(FIELDS.map((f) => [f.name, true])));
     if (Object.keys(errors).length) return;
+    submitting.current = true;
     setSaving(true);
     setServerError('');
     try {
-      const body = Object.fromEntries(Object.entries(form).map(([k, v]) => [k, v.trim()]));
+      const body = Object.fromEntries(Object.entries(form).map(([k, v]) => [k, clean(v)]));
       const { data } = await API.put('/portal/profile', body);
       onSaved(data);
     } catch (err) {
-      setServerError(errorMessage(err));
+      const fieldErrors = apiFieldErrors(err);
+      setServerFieldErrors(fieldErrors);
+      if (!Object.keys(fieldErrors).length) setServerError(errorMessage(err));
     } finally {
+      submitting.current = false;
       setSaving(false);
     }
   };
@@ -71,7 +90,7 @@ const EditContactForm = ({ student, onSaved, onCancel }) => {
       )}
       <div className="row g-3">
         {FIELDS.map((field) => {
-          const invalid = touched && errors[field.name];
+          const invalid = touched[field.name] && errors[field.name];
           return (
             <div key={field.name} className={field.wide ? 'col-12' : 'col-md-6'}>
               <label className="form-label small text-muted" htmlFor={`contact-${field.name}`}>
@@ -81,10 +100,15 @@ const EditContactForm = ({ student, onSaved, onCancel }) => {
                 id={`contact-${field.name}`}
                 name={field.name}
                 type={field.type}
+                autoComplete={field.autoComplete}
                 className={`form-control ${invalid ? 'is-invalid' : ''}`}
                 value={form[field.name]}
-                maxLength={field.name === 'address' ? 300 : 120}
-                onChange={(e) => setForm((prev) => ({ ...prev, [field.name]: e.target.value }))}
+                maxLength={field.max}
+                onChange={(e) => {
+                  setForm((prev) => ({ ...prev, [field.name]: e.target.value }));
+                  if (serverFieldErrors[field.name]) setServerFieldErrors((prev) => ({ ...prev, [field.name]: '' }));
+                }}
+                onBlur={() => setTouched((prev) => ({ ...prev, [field.name]: true }))}
                 aria-invalid={Boolean(invalid)}
                 aria-describedby={invalid ? `contact-${field.name}-error` : undefined}
               />
