@@ -27,7 +27,9 @@ export const nowIso = () => new Date().toISOString();
 
 export function assertSectionMatches({ program, yearLevel, section }) {
   if (!section.startsWith(`${program} ${yearLevel[0]}`)) {
-    throw new HttpError(400, 'Section must match the selected program and year level.');
+    throw new HttpError(400, 'Section must match the selected program and year level.', {
+      section: 'Section must match the selected program and year level.',
+    });
   }
 }
 
@@ -46,7 +48,7 @@ export function assertEnrollmentTransition(previous, next) {
     throw new HttpError(400, 'Confirm the prerequisite override before approval.');
   }
   if (next.status === 'Rejected' && !next.remarks.trim()) {
-    throw new HttpError(400, 'Rejection remarks are required.');
+    throw new HttpError(400, 'Rejection remarks are required.', { remarks: 'Rejection remarks are required.' });
   }
 }
 
@@ -58,8 +60,13 @@ const toMinutes = (time) => {
 export function assertScheduleValid(item, others) {
   const start = toMinutes(item.startTime);
   const end = toMinutes(item.endTime);
-  if (start >= end) throw new HttpError(400, 'Start time must be before end time.');
-  if (start < 420 || end > 1080) throw new HttpError(400, 'Classes must be within 07:00–18:00.');
+  if (start >= end) {
+    throw new HttpError(400, 'Start time must be before end time.', { endTime: 'End time must be after start time.' });
+  }
+  if (start < 420 || end > 1080) {
+    const message = 'Classes must be within 07:00–18:00.';
+    throw new HttpError(400, message, start < 420 ? { startTime: message } : { endTime: message });
+  }
   const overlapping = others.filter(
     (s) =>
       s.id !== item.id &&
@@ -86,7 +93,8 @@ export function assertAnnouncementTarget({ targetAudience, targetValue }, sectio
     'Specific Section': sections,
   };
   if (!allowed[targetAudience]?.includes(targetValue)) {
-    throw new HttpError(400, `Choose a valid value for ${targetAudience.toLowerCase()}.`);
+    const message = `Choose a valid value for ${targetAudience.toLowerCase()}.`;
+    throw new HttpError(400, message, { targetValue: message });
   }
 }
 

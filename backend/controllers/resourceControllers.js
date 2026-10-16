@@ -37,7 +37,7 @@ export const students = crudController(Student, {
     doc.avatarInitials = initials(doc.fullName);
     if (doc.user && doc.isModified('email')) {
       const taken = await User.exists({ email: doc.email, _id: { $ne: doc.user } });
-      if (taken) throw new HttpError(409, 'Another account already uses this email.');
+      if (taken) throw new HttpError(409, 'Email is already registered.', { email: 'Email is already registered.' });
     }
   },
   afterSave: async ({ doc, previous }) => {
