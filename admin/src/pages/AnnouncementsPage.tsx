@@ -1,4 +1,5 @@
 import { EmptyState } from '@/components/shared/EmptyState';
+import { FieldError } from '@/components/shared/FieldError';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import {
@@ -42,6 +43,7 @@ import {
 import { usePageIntent } from '@/hooks/use-page-intent';
 import { formatDate, today, validateTarget } from '@/lib/domain';
 import { cn } from '@/lib/utils';
+import { clean, errorProps, lengthBetween, onlyErrors, type FieldErrors } from '@/lib/validation';
 import type {
   Announcement,
   AnnouncementCategory,
@@ -69,7 +71,8 @@ const categoryColors: Record<AnnouncementCategory, string> = {
 
 export function AnnouncementsPage() {
   const intent = usePageIntent();
-  const [announcements, setAnnouncements] = useAdminCollection('announcements');
+  const [announcements, setAnnouncements, saveAnnouncements] =
+    useAdminCollection('announcements');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [editing, setEditing] = useState<Announcement | null>(null);
@@ -82,6 +85,12 @@ export function AnnouncementsPage() {
   const [message, setMessage] = useState('');
   const [targetAudience, setTargetAudience] = useState('All Students');
   const [targetValue, setTargetValue] = useState('All Students');
+  // Validation: messages show after a field is left (blur) or on save.
+  const [formSubmitted, setFormSubmitted] = useState(false);
+  const [formTouched, setFormTouched] = useState<Record<string, boolean>>({});
+  const [serverErrors, setServerErrors] = useState<FieldErrors>({});
+  const [formError, setFormError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const filtered = useMemo(() => {
     return announcements.filter((a) => {
@@ -94,6 +103,10 @@ export function AnnouncementsPage() {
   }, [announcements, search, statusFilter]);
 
   const openCreate = useCallback(() => {
+    setFormSubmitted(false);
+    setFormTouched({});
+    setServerErrors({});
+    setFormError('');
     setIsCreating(true);
     setEditing(null);
     setTitle('');
@@ -104,6 +117,10 @@ export function AnnouncementsPage() {
   }, []);
 
   const openEdit = useCallback((ann: Announcement) => {
+    setFormSubmitted(false);
+    setFormTouched({});
+    setServerErrors({});
+    setFormError('');
     setEditing(ann);
     setIsCreating(false);
     setTitle(ann.title);
@@ -120,7 +137,8 @@ export function AnnouncementsPage() {
     if (intent.action === 'create') openCreate();
     else if (requestedAnnouncement) openEdit(requestedAnnouncement);
   }, [requestedAnnouncement, intent.action, openCreate, openEdit]);
-  const handleSave = () => {
+  // Same rules as the API (announcementRules + assertAnnouncementTarget).
+  const targetError = (() => {
     try {
       validateTarget(
         { targetAudience: targetAudience as TargetAudience, targetValue },
@@ -130,66 +148,77 @@ export function AnnouncementsPage() {
           sections: sectionOptions,
         }
       );
+      return '';
     } catch (error) {
-      toast.error('Choose a target audience', {
-        description: (error as Error).message,
-      });
-      return;
+      return (error as Error).message;
     }
-    if (!title.trim() || !category || !message.trim()) {
-      toast.error('Missing fields', {
-        description: 'Please fill in title, category, and message.',
-      });
-      return;
-    }
+  })();
+  const allErrors: FieldErrors = {
+    ...onlyErrors({
+      title: lengthBetween(title, 'Title', 5, 200),
+      category: category ? '' : 'Category is required.',
+      message: lengthBetween(message, 'Message', 10, 5000),
+      targetValue: targetError,
+    }),
+    ...onlyErrors(serverErrors),
+  };
+  const formErrors: FieldErrors = Object.fromEntries(
+    Object.entries(allErrors).filter(([key]) => formSubmitted || formTouched[key])
+  );
+  const touchField = (key: string) => setFormTouched((prev) => ({ ...prev, [key]: true }));
+  const editField = (key: string, set: (value: string) => void) => (value: string) => {
+    set(value);
+    setFormError('');
+    setServerErrors((prev) => ({ ...prev, [key]: '' }));
+  };
 
-    if (editing) {
-      if (
-        !setAnnouncements(
-          (prev) =>
-            prev.map((a) =>
-              a.id === editing.id
-                ? {
-                    ...a,
-                    title,
-                    category: category as AnnouncementCategory,
-                    message,
-                    targetAudience: targetAudience as TargetAudience,
-                    targetValue,
-                  }
-                : a
-            ),
-          'Updated announcement: ' + title
+  const handleSave = async () => {
+    if (saving) return; // no double submits
+    setFormSubmitted(true);
+    setFormError('');
+    if (Object.keys(allErrors).length) return;
+    const fields = {
+      title: clean(title),
+      category: category as AnnouncementCategory,
+      message: message.trim(),
+      targetAudience: targetAudience as TargetAudience,
+      targetValue,
+    };
+
+    setSaving(true);
+    const saved = editing
+      ? await saveAnnouncements(
+          (prev) => prev.map((a) => (a.id === editing.id ? { ...a, ...fields } : a)),
+          'Updated announcement: ' + fields.title
         )
-      )
-        return;
-      toast.success('Announcement updated', {
-        description: `"${title}" has been updated.`,
-      });
-    } else {
-      const newAnn: Announcement = {
-        id: crypto.randomUUID(),
-        title,
-        category: category as AnnouncementCategory,
-        message,
-        targetAudience: targetAudience as TargetAudience,
-        targetValue,
-        status: 'Draft',
-        author: 'Admin',
-        dateCreated: today(),
-        datePublished: null,
-      };
-      if (
-        !setAnnouncements(
-          (prev) => [newAnn, ...prev],
-          'Created announcement: ' + title
-        )
-      )
-        return;
-      toast.success('Announcement created', {
-        description: `"${title}" has been saved as a draft.`,
-      });
+      : await saveAnnouncements(
+          (prev) => [
+            {
+              id: crypto.randomUUID(),
+              ...fields,
+              status: 'Draft',
+              author: 'Admin',
+              dateCreated: today(),
+              datePublished: null,
+            },
+            ...prev,
+          ],
+          'Created announcement: ' + fields.title
+        );
+    setSaving(false);
+    if (!saved.ok) {
+      setServerErrors(saved.fieldErrors);
+      if (!Object.keys(saved.fieldErrors).length) setFormError(saved.message);
+      return;
     }
+    if (editing)
+      toast.success('Announcement updated', {
+        description: `"${fields.title}" has been updated.`,
+      });
+    else
+      toast.success('Announcement created', {
+        description: `"${fields.title}" has been saved as a draft.`,
+      });
     closeForm();
   };
 
@@ -400,7 +429,10 @@ export function AnnouncementsPage() {
       )}
 
       {/* Create/Edit Dialog */}
-      <Dialog open={formOpen} onOpenChange={(open) => !open && closeForm()}>
+      <Dialog
+        open={formOpen}
+        onOpenChange={(open) => !open && !saving && closeForm()}
+      >
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>
@@ -413,19 +445,33 @@ export function AnnouncementsPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            {formError && (
+              <p role="alert" className="text-sm text-destructive">
+                {formError}
+              </p>
+            )}
             <div className="space-y-2">
               <Label htmlFor="announcement-title">Title</Label>
               <Input
                 id="announcement-title"
                 placeholder="Enter announcement title..."
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                maxLength={200}
+                onChange={(e) => editField('title', setTitle)(e.target.value)}
+                onBlur={() => touchField('title')}
+                className={formErrors.title ? 'border-destructive' : undefined}
+                {...errorProps('announcement-title-error', formErrors.title)}
               />
+              <FieldError id="announcement-title-error" message={formErrors.title} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="announcement-category">Category</Label>
-              <Select value={category} onValueChange={setCategory}>
-                <SelectTrigger id="announcement-category">
+              <Select value={category} onValueChange={editField('category', setCategory)}>
+                <SelectTrigger
+                  id="announcement-category"
+                  className={formErrors.category ? 'border-destructive' : undefined}
+                  {...errorProps('announcement-category-error', formErrors.category)}
+                >
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
@@ -436,6 +482,7 @@ export function AnnouncementsPage() {
                   ))}
                 </SelectContent>
               </Select>
+              <FieldError id="announcement-category-error" message={formErrors.category} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="announcement-message">Message</Label>
@@ -443,9 +490,14 @@ export function AnnouncementsPage() {
                 id="announcement-message"
                 placeholder="Enter announcement message..."
                 value={message}
-                onChange={(e) => setMessage(e.target.value)}
+                maxLength={5000}
+                onChange={(e) => editField('message', setMessage)(e.target.value)}
+                onBlur={() => touchField('message')}
                 rows={4}
+                className={formErrors.message ? 'border-destructive' : undefined}
+                {...errorProps('announcement-message-error', formErrors.message)}
               />
+              <FieldError id="announcement-message-error" message={formErrors.message} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="announcement-audience">Target Audience</Label>
@@ -471,7 +523,7 @@ export function AnnouncementsPage() {
             {targetAudience === 'Specific Program' && (
               <div className="space-y-2">
                 <Label htmlFor="announcement-program">Program</Label>
-                <Select value={targetValue} onValueChange={setTargetValue}>
+                <Select value={targetValue} onValueChange={editField('targetValue', setTargetValue)}>
                   <SelectTrigger id="announcement-program">
                     <SelectValue placeholder="Select program" />
                   </SelectTrigger>
@@ -488,7 +540,7 @@ export function AnnouncementsPage() {
             {targetAudience === 'Specific Year Level' && (
               <div className="space-y-2">
                 <Label htmlFor="announcement-year">Year Level</Label>
-                <Select value={targetValue} onValueChange={setTargetValue}>
+                <Select value={targetValue} onValueChange={editField('targetValue', setTargetValue)}>
                   <SelectTrigger id="announcement-year">
                     <SelectValue placeholder="Select year level" />
                   </SelectTrigger>
@@ -505,7 +557,7 @@ export function AnnouncementsPage() {
             {targetAudience === 'Specific Section' && (
               <div className="space-y-2">
                 <Label htmlFor="announcement-section">Section</Label>
-                <Select value={targetValue} onValueChange={setTargetValue}>
+                <Select value={targetValue} onValueChange={editField('targetValue', setTargetValue)}>
                   <SelectTrigger id="announcement-section">
                     <SelectValue placeholder="Select section" />
                   </SelectTrigger>
@@ -519,13 +571,14 @@ export function AnnouncementsPage() {
                 </Select>
               </div>
             )}
+            <FieldError id="announcement-target-error" message={formErrors.targetValue} />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={closeForm}>
+            <Button variant="outline" onClick={closeForm} disabled={saving}>
               Cancel
             </Button>
-            <Button onClick={handleSave}>
-              {editing ? 'Update' : 'Save as Draft'}
+            <Button onClick={() => void handleSave()} disabled={saving}>
+              {saving ? 'Saving…' : editing ? 'Update' : 'Save as Draft'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -48,6 +48,8 @@ import {
   Upload,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { FieldError } from '@/components/shared/FieldError';
+import { errorProps } from '@/lib/validation';
 import { toast } from 'sonner';
 
 export function AcademicRecordsPage() {
@@ -56,8 +58,12 @@ export function AcademicRecordsPage() {
   } = useAdminData();
   const intent = usePageIntent();
   const [gradeError, setGradeError] = useState('');
+  // Messages under the grade fields: after leaving a field (blur) or on save.
+  const [gradeTouched, setGradeTouched] = useState<Record<string, boolean>>({});
+  const [gradeServerErrors, setGradeServerErrors] = useState<Record<string, string>>({});
+  const [savingGrade, setSavingGrade] = useState(false);
   const [chooseGrade, setChooseGrade] = useState(intent.action === 'encode');
-  const [grades, setGrades] = useAdminCollection('grades');
+  const [grades, setGrades, saveGrades] = useAdminCollection('grades');
   const [search, setSearch] = useState('');
   const [semesterFilter, setSemesterFilter] = useState('all');
   const [publishFilter, setPublishFilter] = useState('all');
@@ -85,21 +91,40 @@ export function AcademicRecordsPage() {
     });
   }, [grades, search, semesterFilter, publishFilter]);
 
-  const handleSaveGrade = () => {
-    if (!encodeGrade) return;
-    let midtermNum: number | null, finalNum: number | null;
+  // Same rule as the API: empty, or 1.00–5.00 with up to two decimals.
+  const gradeFieldError = (value: string) => {
     try {
-      midtermNum = parseGrade(midterm);
-      finalNum = parseGrade(finalGrade);
-      setGradeError('');
+      parseGrade(value);
+      return '';
     } catch (error) {
-      setGradeError((error as Error).message);
-      return;
+      return (error as Error).message;
     }
+  };
+  const gradeErrors: Record<string, string> = {
+    midtermGrade: gradeServerErrors.midtermGrade || gradeFieldError(midterm),
+    finalGrade: gradeServerErrors.finalGrade || gradeFieldError(finalGrade),
+  };
+  const shownGradeError = (key: string) => (gradeTouched[key] ? gradeErrors[key] : '');
+  const resetGradeForm = () => {
+    setEncodeGrade(null);
+    setMidterm('');
+    setFinalGrade('');
+    setGradeError('');
+    setGradeTouched({});
+    setGradeServerErrors({});
+  };
+
+  const handleSaveGrade = async () => {
+    if (!encodeGrade || savingGrade) return;
+    setGradeTouched({ midtermGrade: true, finalGrade: true });
+    setGradeError('');
+    if (gradeErrors.midtermGrade || gradeErrors.finalGrade) return;
+    const midtermNum = parseGrade(midterm);
+    const finalNum = parseGrade(finalGrade);
     const remark = calculateRemark(finalNum);
 
-    if (
-      !setGrades(
+    setSavingGrade(true);
+    const saved = await saveGrades(
         (prev) =>
           prev.map((g) =>
             g.id === encodeGrade.id
@@ -114,15 +139,18 @@ export function AcademicRecordsPage() {
               : g
           ),
         `Encoded grade for ${encodeGrade.studentName}: ${encodeGrade.subjectTitle}`
-      )
-    )
+    );
+    setSavingGrade(false);
+    if (!saved.ok) {
+      setGradeServerErrors(saved.fieldErrors);
+      if (!saved.fieldErrors.midtermGrade && !saved.fieldErrors.finalGrade)
+        setGradeError(saved.message);
       return;
+    }
     toast.success('Grade saved', {
       description: `${encodeGrade.subjectTitle} grade for ${encodeGrade.studentName} has been encoded.`,
     });
-    setEncodeGrade(null);
-    setMidterm('');
-    setFinalGrade('');
+    resetGradeForm();
   };
 
   const handlePublish = (grade: GradeRecord) => {
@@ -450,11 +478,7 @@ export function AcademicRecordsPage() {
       <Dialog
         open={!!encodeGrade}
         onOpenChange={(open) => {
-          if (!open) {
-            setEncodeGrade(null);
-            setMidterm('');
-            setFinalGrade('');
-          }
+          if (!open && !savingGrade) resetGradeForm();
         }}
       >
         <DialogContent className="max-w-md">
@@ -497,8 +521,16 @@ export function AcademicRecordsPage() {
                     max="5"
                     placeholder="e.g. 1.50"
                     value={midterm}
-                    onChange={(e) => setMidterm(e.target.value)}
+                    maxLength={4}
+                    onChange={(e) => {
+                      setMidterm(e.target.value.trim());
+                      setGradeServerErrors({});
+                    }}
+                    onBlur={() => setGradeTouched((prev) => ({ ...prev, midtermGrade: true }))}
+                    className={shownGradeError('midtermGrade') ? 'border-destructive' : undefined}
+                    {...errorProps('midterm-error', shownGradeError('midtermGrade'))}
                   />
+                  <FieldError alert id="midterm-error" message={shownGradeError('midtermGrade')} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="final">Final Grade (1.00 - 5.00)</Label>
@@ -511,8 +543,16 @@ export function AcademicRecordsPage() {
                     max="5"
                     placeholder="e.g. 1.25"
                     value={finalGrade}
-                    onChange={(e) => setFinalGrade(e.target.value)}
+                    maxLength={4}
+                    onChange={(e) => {
+                      setFinalGrade(e.target.value.trim());
+                      setGradeServerErrors({});
+                    }}
+                    onBlur={() => setGradeTouched((prev) => ({ ...prev, finalGrade: true }))}
+                    className={shownGradeError('finalGrade') ? 'border-destructive' : undefined}
+                    {...errorProps('final-error', shownGradeError('finalGrade'))}
                   />
+                  <FieldError alert id="final-error" message={shownGradeError('finalGrade')} />
                 </div>
                 <div className="rounded-lg border border-border bg-muted/30 p-3">
                   <p className="text-xs text-muted-foreground">
@@ -534,17 +574,12 @@ export function AcademicRecordsPage() {
                 </div>
               </div>
               <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setEncodeGrade(null);
-                    setMidterm('');
-                    setFinalGrade('');
-                  }}
-                >
+                <Button variant="outline" onClick={resetGradeForm} disabled={savingGrade}>
                   Cancel
                 </Button>
-                <Button onClick={handleSaveGrade}>Save Grade</Button>
+                <Button onClick={() => void handleSaveGrade()} disabled={savingGrade}>
+                  {savingGrade ? 'Saving…' : 'Save Grade'}
+                </Button>
               </DialogFooter>
             </>
           )}

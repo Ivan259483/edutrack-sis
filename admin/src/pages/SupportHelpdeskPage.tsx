@@ -1,4 +1,5 @@
 import { EmptyState } from '@/components/shared/EmptyState';
+import { FieldError } from '@/components/shared/FieldError';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -32,6 +33,7 @@ import {
   visibleTicket,
 } from '@/lib/domain';
 import { cn } from '@/lib/utils';
+import { errorProps } from '@/lib/validation';
 import type { SupportTicket, TicketStatus } from '@/types';
 import { CheckCircle2, Clock, LifeBuoy, Search, Send } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -46,12 +48,14 @@ const categoryColors: Record<string, string> = {
 
 export function SupportHelpdeskPage() {
   const intent = usePageIntent();
-  const [tickets, setTickets] = useAdminCollection('tickets');
+  const [tickets, setTickets, saveTickets] = useAdminCollection('tickets');
   const [activeTab, setActiveTab] = useState('all');
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
+  const [replyError, setReplyError] = useState('');
+  const [sendingReply, setSendingReply] = useState(false);
   const detailRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -108,12 +112,34 @@ export function SupportHelpdeskPage() {
     );
   };
 
-  const addReply = (id: string, message: string, resolve: boolean) =>
-    setTickets(
+  // Same rule as the API: 1–5000 characters. Waits for the server so the
+  // reply stays in the box if it is rejected.
+  const addReply = async (resolve: boolean) => {
+    if (!selectedTicket || sendingReply) return false;
+    const message = replyText.trim();
+    const problem = !message
+      ? `Enter a reply before ${resolve ? 'resolving' : 'sending'}.`
+      : message.length > 5000
+        ? 'Reply must be at most 5000 characters.'
+        : '';
+    setReplyError(problem);
+    if (problem) return false;
+    setSendingReply(true);
+    const saved = await saveTickets(
       (prev) =>
-        prev.map((t) => (t.id === id ? replyToTicket(t, message, resolve) : t)),
+        prev.map((t) =>
+          t.id === selectedTicket.id ? replyToTicket(t, message, resolve) : t
+        ),
       resolve ? 'Replied and resolved ticket' : 'Replied to ticket'
     );
+    setSendingReply(false);
+    if (!saved.ok) {
+      setReplyError(Object.values(saved.fieldErrors)[0] || saved.message);
+      return false;
+    }
+    setReplyText('');
+    return true;
+  };
   const handleMarkInProgress = () => {
     if (!selectedTicket) return;
     if (!updateTicketStatus(selectedTicket.id, 'In Progress')) return;
@@ -122,37 +148,26 @@ export function SupportHelpdeskPage() {
     });
   };
 
-  const handleReply = () => {
-    if (!selectedTicket || !replyText.trim()) {
-      toast.error('Reply is empty', {
-        description: 'Please enter a reply before sending.',
-      });
-      return;
-    }
-    if (!addReply(selectedTicket.id, replyText.trim(), false)) return;
+  const handleReply = async () => {
+    const ticket = selectedTicket;
+    if (!ticket || !(await addReply(false))) return;
     toast.success('Reply saved', {
-      description: `Reply saved to ${selectedTicket.ticketNumber}. Ticket marked as In Progress.`,
+      description: `Reply saved to ${ticket.ticketNumber}. Ticket marked as In Progress.`,
     });
-    setReplyText('');
   };
 
-  const handleReplyAndResolve = () => {
-    if (!selectedTicket || !replyText.trim()) {
-      toast.error('Reply is empty', {
-        description: 'Please enter a reply before resolving.',
-      });
-      return;
-    }
-    if (!addReply(selectedTicket.id, replyText.trim(), true)) return;
+  const handleReplyAndResolve = async () => {
+    const ticket = selectedTicket;
+    if (!ticket || !(await addReply(true))) return;
     toast.success('Ticket resolved', {
-      description: `Reply saved and ${selectedTicket.ticketNumber} marked as Resolved.`,
+      description: `Reply saved and ${ticket.ticketNumber} marked as Resolved.`,
     });
-    setReplyText('');
   };
 
   const openTicket = (ticket: SupportTicket) => {
     setSelectedTicketId(ticket.id);
     setReplyText('');
+    setReplyError('');
   };
 
   return (
@@ -414,9 +429,16 @@ export function SupportHelpdeskPage() {
                           aria-label="Reply to selected ticket"
                           placeholder="Type your reply..."
                           value={replyText}
-                          onChange={(e) => setReplyText(e.target.value)}
+                          maxLength={5000}
+                          onChange={(e) => {
+                            setReplyText(e.target.value);
+                            setReplyError('');
+                          }}
                           rows={3}
+                          className={replyError ? 'border-destructive' : undefined}
+                          {...errorProps('reply-error', replyError)}
                         />
+                        <FieldError id="reply-error" message={replyError} />
                         <div className="flex flex-wrap gap-2">
                           {selectedTicket.status === 'Open' && (
                             <Button
@@ -431,14 +453,16 @@ export function SupportHelpdeskPage() {
                           <Button
                             variant="outline"
                             className="gap-2"
-                            onClick={handleReply}
+                            onClick={() => void handleReply()}
+                            disabled={sendingReply}
                           >
                             <Send className="h-4 w-4" />
                             Reply
                           </Button>
                           <Button
                             className="gap-2"
-                            onClick={handleReplyAndResolve}
+                            onClick={() => void handleReplyAndResolve()}
+                            disabled={sendingReply}
                           >
                             <CheckCircle2 className="h-4 w-4" />
                             Reply & Resolve

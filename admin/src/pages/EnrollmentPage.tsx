@@ -1,4 +1,6 @@
 import { EmptyState } from '@/components/shared/EmptyState';
+import { FieldError } from '@/components/shared/FieldError';
+import { errorProps } from '@/lib/validation';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { PrintableDocument } from '@/components/shared/PrintableDocument';
 import { StatusBadge } from '@/components/shared/StatusBadge';
@@ -73,7 +75,7 @@ export function EnrollmentPage() {
   const intent = usePageIntent();
   const [overrideEnrollment, setOverrideEnrollment] =
     useState<Enrollment | null>(null);
-  const [enrollments, setEnrollments] = useAdminCollection('enrollments');
+  const [enrollments, setEnrollments, saveEnrollments] = useAdminCollection('enrollments');
   const [activeTab, setActiveTab] = useState('all');
   const [search, setSearch] = useState('');
   const [programFilter, setProgramFilter] = useState('all');
@@ -83,6 +85,10 @@ export function EnrollmentPage() {
     null
   );
   const [rejectRemarks, setRejectRemarks] = useState('');
+  // Shown after leaving the field or on Confirm Rejection.
+  const [remarksTouched, setRemarksTouched] = useState(false);
+  const [remarksServerError, setRemarksServerError] = useState('');
+  const [rejecting, setRejecting] = useState(false);
   const [corEnrollment, setCorEnrollment] = useState<Enrollment | null>(null);
   useEffect(() => {
     if (intent.recordId)
@@ -134,31 +140,46 @@ export function EnrollmentPage() {
     });
   };
 
-  const handleReject = () => {
-    if (rejectEnrollment && rejectRemarks.trim()) {
-      const rejected = transitionEnrollment(
-        rejectEnrollment,
-        'Rejected',
-        rejectRemarks
-      );
-      if (
-        !setEnrollments(
-          (prev) => prev.map((e) => (e.id === rejected.id ? rejected : e)),
-          `Rejected enrollment for ${rejectEnrollment.studentName}`
-        )
-      )
-        return;
-      setSelectedEnrollment(rejected);
-      toast.success('Enrollment rejected', {
-        description: `${rejectEnrollment.studentName}'s enrollment has been rejected.`,
-      });
-      setRejectEnrollment(null);
-      setRejectRemarks('');
-    } else if (!rejectRemarks.trim()) {
-      toast.error('Remarks required', {
-        description: 'Please provide a reason for rejection.',
-      });
+  // Same rule as the API: required when rejecting, at most 1000 characters.
+  const remarksError =
+    remarksServerError ||
+    (!rejectRemarks.trim()
+      ? 'Rejection remarks are required.'
+      : rejectRemarks.trim().length > 1000
+        ? 'Remarks must be at most 1000 characters.'
+        : '');
+  const shownRemarksError = remarksTouched ? remarksError : '';
+  const closeReject = () => {
+    setRejectEnrollment(null);
+    setRejectRemarks('');
+    setRemarksTouched(false);
+    setRemarksServerError('');
+  };
+
+  const handleReject = async () => {
+    if (!rejectEnrollment || rejecting) return;
+    setRemarksTouched(true);
+    if (remarksError) return;
+    const rejected = transitionEnrollment(
+      rejectEnrollment,
+      'Rejected',
+      rejectRemarks.trim()
+    );
+    setRejecting(true);
+    const saved = await saveEnrollments(
+      (prev) => prev.map((e) => (e.id === rejected.id ? rejected : e)),
+      `Rejected enrollment for ${rejectEnrollment.studentName}`
+    );
+    setRejecting(false);
+    if (!saved.ok) {
+      setRemarksServerError(saved.fieldErrors.remarks || saved.message);
+      return;
     }
+    setSelectedEnrollment(rejected);
+    toast.success('Enrollment rejected', {
+      description: `${rejectEnrollment.studentName}'s enrollment has been rejected.`,
+    });
+    closeReject();
   };
 
   const handlePrint = () => {
@@ -522,10 +543,7 @@ export function EnrollmentPage() {
       <Dialog
         open={!!rejectEnrollment}
         onOpenChange={(open) => {
-          if (!open) {
-            setRejectEnrollment(null);
-            setRejectRemarks('');
-          }
+          if (!open && !rejecting) closeReject();
         }}
       >
         <DialogContent className="max-w-md">
@@ -543,22 +561,28 @@ export function EnrollmentPage() {
                   aria-label="Rejection remarks"
                   placeholder="Enter rejection remarks..."
                   value={rejectRemarks}
-                  onChange={(e) => setRejectRemarks(e.target.value)}
+                  maxLength={1000}
+                  onChange={(e) => {
+                    setRejectRemarks(e.target.value);
+                    setRemarksServerError('');
+                  }}
+                  onBlur={() => setRemarksTouched(true)}
                   rows={4}
+                  className={shownRemarksError ? 'border-destructive' : undefined}
+                  {...errorProps('reject-remarks-error', shownRemarksError)}
                 />
+                <FieldError id="reject-remarks-error" message={shownRemarksError} />
               </div>
               <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setRejectEnrollment(null);
-                    setRejectRemarks('');
-                  }}
-                >
+                <Button variant="outline" onClick={closeReject} disabled={rejecting}>
                   Cancel
                 </Button>
-                <Button variant="destructive" onClick={handleReject}>
-                  Confirm Rejection
+                <Button
+                  variant="destructive"
+                  onClick={() => void handleReject()}
+                  disabled={rejecting}
+                >
+                  {rejecting ? 'Rejecting…' : 'Confirm Rejection'}
                 </Button>
               </DialogFooter>
             </>

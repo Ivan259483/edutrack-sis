@@ -1,3 +1,4 @@
+import { FieldError } from '@/components/shared/FieldError';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
 import {
@@ -48,6 +49,7 @@ import {
   validateSchedule,
 } from '@/lib/domain';
 import { cn } from '@/lib/utils';
+import { clean, errorProps, onlyErrors, ROOM_PATTERN, type FieldErrors } from '@/lib/validation';
 import type { DayOfWeek, Program, ScheduleClass } from '@/types';
 import {
   AlertTriangle,
@@ -105,7 +107,7 @@ export function ClassSchedulesPage() {
   const {
     state: { settings },
   } = useAdminData();
-  const [schedules, setSchedules] = useAdminCollection('schedules');
+  const [schedules, setSchedules, saveSchedules] = useAdminCollection('schedules');
   const [sectionFilter, setSectionFilter] = useState('all');
   const [instructorFilter, setInstructorFilter] = useState('all');
   const [dayFilter, setDayFilter] = useState('all');
@@ -124,6 +126,12 @@ export function ClassSchedulesPage() {
   const [formStartTime, setFormStartTime] = useState('');
   const [formEndTime, setFormEndTime] = useState('');
   const [formRoom, setFormRoom] = useState('');
+  // Validation: messages show after a field is left (blur) or on save.
+  const [formSubmitted, setFormSubmitted] = useState(false);
+  const [formTouched, setFormTouched] = useState<Record<string, boolean>>({});
+  const [formServerErrors, setFormServerErrors] = useState<FieldErrors>({});
+  const [formError, setFormError] = useState('');
+  const [savingClass, setSavingClass] = useState(false);
 
   const filtered = useMemo(() => {
     return schedules.filter((s) => {
@@ -165,7 +173,52 @@ export function ClassSchedulesPage() {
     [editing]
   );
 
+  const resetValidation = () => {
+    setFormSubmitted(false);
+    setFormTouched({});
+    setFormServerErrors({});
+    setFormError('');
+  };
+
+  // Same rules as the API (scheduleRules + assertScheduleValid).
+  const allFormErrors: FieldErrors = (() => {
+    const room = clean(formRoom);
+    const errors = onlyErrors({
+      subject: formSubject ? '' : 'Subject is required.',
+      section: formSection ? '' : 'Section is required.',
+      instructor: formInstructor ? '' : 'Instructor is required.',
+      day: formDay ? '' : 'Day is required.',
+      startTime: formStartTime ? '' : 'Start time is required.',
+      endTime: formEndTime ? '' : 'End time is required.',
+      room: !room
+        ? 'Room is required.'
+        : room.length > 30
+          ? 'Room must be at most 30 characters.'
+          : ROOM_PATTERN.test(room)
+            ? ''
+            : 'Room may only contain letters, numbers, spaces, periods, # and hyphens.',
+    });
+    if (!errors.startTime && !errors.endTime) {
+      const start = timeToMinutes(formStartTime);
+      const end = timeToMinutes(formEndTime);
+      if (end <= start) errors.endTime = 'End time must be after start time.';
+      else if (start < 420) errors.startTime = 'Classes must be within 07:00–18:00.';
+      else if (end > 1080) errors.endTime = 'Classes must be within 07:00–18:00.';
+    }
+    return { ...errors, ...onlyErrors(formServerErrors) };
+  })();
+  const formErrors: FieldErrors = Object.fromEntries(
+    Object.entries(allFormErrors).filter(([key]) => formSubmitted || formTouched[key])
+  );
+  const touchField = (key: string) => setFormTouched((prev) => ({ ...prev, [key]: true }));
+  const editField = (key: string, set: (value: string) => void) => (value: string) => {
+    set(value);
+    setFormError('');
+    setFormServerErrors((prev) => ({ ...prev, [key]: '', startTime: '', endTime: '' }));
+  };
+
   const openAdd = () => {
+    resetValidation();
     setEditing(null);
     setFormSubject('');
     setFormSection('');
@@ -178,6 +231,7 @@ export function ClassSchedulesPage() {
   };
 
   const openEdit = (cls: ScheduleClass) => {
+    resetValidation();
     setEditing(cls);
     setFormSubject(
       subjects.find((s) => s.code === cls.subjectCode)?.id ??
@@ -212,28 +266,11 @@ export function ClassSchedulesPage() {
     setDeleteTarget(null);
   };
 
-  const handleSave = () => {
-    if (
-      !formSubject ||
-      !formSection ||
-      !formInstructor ||
-      !formDay ||
-      !formStartTime ||
-      !formEndTime ||
-      !formRoom
-    ) {
-      toast.error('Missing fields', {
-        description: 'Please fill in all fields before saving.',
-      });
-      return;
-    }
-
-    if (timeToMinutes(formEndTime) <= timeToMinutes(formStartTime)) {
-      toast.error('Invalid time', {
-        description: 'End time must be after start time.',
-      });
-      return;
-    }
+  const handleSave = async () => {
+    if (savingClass) return; // no double submits
+    setFormSubmitted(true);
+    setFormError('');
+    if (Object.keys(allFormErrors).length) return;
 
     const subject = subjectOptions.find((s) => s.id === formSubject);
     if (!subject) return;
@@ -252,27 +289,29 @@ export function ClassSchedulesPage() {
       day: formDay as DayOfWeek,
       startTime: formStartTime,
       endTime: formEndTime,
-      room: formRoom.trim(),
+      room: clean(formRoom),
     };
 
     try {
       validateSchedule(newClass, schedules);
     } catch (error) {
-      toast.error('Cannot save schedule', {
-        description: (error as Error).message,
-      });
+      setFormError((error as Error).message);
       return;
     }
-    if (
-      !setSchedules(
-        (prev) =>
-          editing
-            ? prev.map((s) => (s.id === editing.id ? newClass : s))
-            : [...prev, newClass],
-        `${editing ? 'Updated' : 'Added'} class ${subject.title} for ${formSection}`
-      )
-    )
+    setSavingClass(true);
+    const saved = await saveSchedules(
+      (prev) =>
+        editing
+          ? prev.map((s) => (s.id === editing.id ? newClass : s))
+          : [...prev, newClass],
+      `${editing ? 'Updated' : 'Added'} class ${subject.title} for ${formSection}`
+    );
+    setSavingClass(false);
+    if (!saved.ok) {
+      setFormServerErrors(saved.fieldErrors);
+      if (!Object.keys(saved.fieldErrors).length) setFormError(saved.message);
       return;
+    }
     toast.success(editing ? 'Class updated' : 'Class added', {
       description: editing
         ? `${subject.title} for ${formSection} has been updated.`
@@ -594,7 +633,10 @@ export function ClassSchedulesPage() {
       </Card>
 
       {/* Add / Edit Class Dialog */}
-      <Dialog open={showForm} onOpenChange={(open) => !open && closeForm()}>
+      <Dialog
+        open={showForm}
+        onOpenChange={(open) => !open && !savingClass && closeForm()}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>{editing ? 'Edit Class' : 'Add Class'}</DialogTitle>
@@ -605,10 +647,19 @@ export function ClassSchedulesPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            {formError && (
+              <p role="alert" className="text-sm text-destructive">
+                {formError}
+              </p>
+            )}
             <div className="space-y-2">
               <Label htmlFor="schedule-subject">Subject</Label>
-              <Select value={formSubject} onValueChange={setFormSubject}>
-                <SelectTrigger id="schedule-subject">
+              <Select value={formSubject} onValueChange={editField('subject', setFormSubject)}>
+                <SelectTrigger
+                  id="schedule-subject"
+                  className={formErrors.subject ? 'border-destructive' : undefined}
+                  {...errorProps('schedule-subject-error', formErrors.subject)}
+                >
                   <SelectValue placeholder="Select subject" />
                 </SelectTrigger>
                 <SelectContent>
@@ -619,11 +670,16 @@ export function ClassSchedulesPage() {
                   ))}
                 </SelectContent>
               </Select>
+              <FieldError id="schedule-subject-error" message={formErrors.subject} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="schedule-section">Section</Label>
-              <Select value={formSection} onValueChange={setFormSection}>
-                <SelectTrigger id="schedule-section">
+              <Select value={formSection} onValueChange={editField('section', setFormSection)}>
+                <SelectTrigger
+                  id="schedule-section"
+                  className={formErrors.section ? 'border-destructive' : undefined}
+                  {...errorProps('schedule-section-error', formErrors.section)}
+                >
                   <SelectValue placeholder="Select section" />
                 </SelectTrigger>
                 <SelectContent>
@@ -634,11 +690,16 @@ export function ClassSchedulesPage() {
                   ))}
                 </SelectContent>
               </Select>
+              <FieldError id="schedule-section-error" message={formErrors.section} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="schedule-instructor">Instructor</Label>
-              <Select value={formInstructor} onValueChange={setFormInstructor}>
-                <SelectTrigger id="schedule-instructor">
+              <Select value={formInstructor} onValueChange={editField('instructor', setFormInstructor)}>
+                <SelectTrigger
+                  id="schedule-instructor"
+                  className={formErrors.instructor ? 'border-destructive' : undefined}
+                  {...errorProps('schedule-instructor-error', formErrors.instructor)}
+                >
                   <SelectValue placeholder="Select instructor" />
                 </SelectTrigger>
                 <SelectContent>
@@ -649,11 +710,16 @@ export function ClassSchedulesPage() {
                   ))}
                 </SelectContent>
               </Select>
+              <FieldError id="schedule-instructor-error" message={formErrors.instructor} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="schedule-day">Day</Label>
-              <Select value={formDay} onValueChange={setFormDay}>
-                <SelectTrigger id="schedule-day">
+              <Select value={formDay} onValueChange={editField('day', setFormDay)}>
+                <SelectTrigger
+                  id="schedule-day"
+                  className={formErrors.day ? 'border-destructive' : undefined}
+                  {...errorProps('schedule-day-error', formErrors.day)}
+                >
                   <SelectValue placeholder="Select day" />
                 </SelectTrigger>
                 <SelectContent>
@@ -664,6 +730,7 @@ export function ClassSchedulesPage() {
                   ))}
                 </SelectContent>
               </Select>
+              <FieldError id="schedule-day-error" message={formErrors.day} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
@@ -674,8 +741,12 @@ export function ClassSchedulesPage() {
                   max="18:00"
                   type="time"
                   value={formStartTime}
-                  onChange={(e) => setFormStartTime(e.target.value)}
+                  onChange={(e) => editField('startTime', setFormStartTime)(e.target.value)}
+                  onBlur={() => touchField('startTime')}
+                  className={formErrors.startTime ? 'border-destructive' : undefined}
+                  {...errorProps('schedule-start-error', formErrors.startTime)}
                 />
+                <FieldError id="schedule-start-error" message={formErrors.startTime} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="schedule-end">End Time</Label>
@@ -685,8 +756,12 @@ export function ClassSchedulesPage() {
                   max="18:00"
                   type="time"
                   value={formEndTime}
-                  onChange={(e) => setFormEndTime(e.target.value)}
+                  onChange={(e) => editField('endTime', setFormEndTime)(e.target.value)}
+                  onBlur={() => touchField('endTime')}
+                  className={formErrors.endTime ? 'border-destructive' : undefined}
+                  {...errorProps('schedule-end-error', formErrors.endTime)}
                 />
+                <FieldError id="schedule-end-error" message={formErrors.endTime} />
               </div>
             </div>
             <div className="space-y-2">
@@ -694,16 +769,23 @@ export function ClassSchedulesPage() {
               <Input
                 id="schedule-room"
                 placeholder="e.g. Rm 401"
+                maxLength={30}
                 value={formRoom}
-                onChange={(e) => setFormRoom(e.target.value)}
+                onChange={(e) => editField('room', setFormRoom)(e.target.value)}
+                onBlur={() => touchField('room')}
+                className={formErrors.room ? 'border-destructive' : undefined}
+                {...errorProps('schedule-room-error', formErrors.room)}
               />
+              <FieldError id="schedule-room-error" message={formErrors.room} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={closeForm}>
+            <Button variant="outline" onClick={closeForm} disabled={savingClass}>
               Cancel
             </Button>
-            <Button onClick={handleSave}>Save Schedule</Button>
+            <Button onClick={() => void handleSave()} disabled={savingClass}>
+              {savingClass ? 'Saving…' : 'Save Schedule'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

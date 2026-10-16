@@ -1,6 +1,13 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type SetStateAction,
+} from 'react';
 import { toast } from 'sonner';
 import { ZodError } from 'zod';
+import { apiErrorMessage, apiFieldErrors } from '@/lib/api';
 import { Context, type Store } from './context';
 import { localRepository, type AdminRepository } from './repository';
 import type { AdminState } from './schema';
@@ -25,8 +32,13 @@ export function AdminProvider({
 }: {
   children: ReactNode;
   repository?: AdminRepository;
-  /** Called after each committed change, e.g. to sync it to the server. */
-  onCommit?: (previous: AdminState, next: AdminState) => void;
+  /** Called after each committed change, e.g. to sync it to the server. With
+   *  `quiet`, failures are not toasted: the returned promise rejects instead. */
+  onCommit?: (
+    previous: AdminState,
+    next: AdminState,
+    options?: { quiet: boolean }
+  ) => Promise<void> | void;
   /** Newer records from the server; replaces the current state when it changes. */
   snapshot?: AdminState;
 }) {
@@ -49,7 +61,13 @@ export function AdminProvider({
     current.current = snapshot;
     setState(snapshot);
   }, [snapshot]);
-  const update: Store['update'] = (key, change, action) => {
+  // Applies a change locally; `synced` settles once the server has it.
+  const commit = <K extends keyof AdminState>(
+    key: K,
+    change: SetStateAction<AdminState[K]>,
+    action: string | undefined,
+    quiet: boolean
+  ): { ok: true; synced: Promise<void> | void } | { ok: false; message: string } => {
     try {
       if (loaded.error) throw new Error(loaded.error);
       const previous = current.current;
@@ -129,8 +147,7 @@ export function AdminProvider({
       current.current = next;
       setState(next);
       setError(null);
-      onCommit?.(previous, next);
-      return true;
+      return { ok: true, synced: onCommit?.(previous, next, { quiet }) };
     } catch (cause) {
       const message =
         cause instanceof ZodError
@@ -141,12 +158,29 @@ export function AdminProvider({
             ? cause.message
             : 'Unable to save changes.';
       setError(message);
-      toast.error('Changes were not saved', { description: message });
-      return false;
+      if (!quiet) toast.error('Changes were not saved', { description: message });
+      return { ok: false, message };
+    }
+  };
+  const update: Store['update'] = (key, change, action) =>
+    commit(key, change, action, false).ok;
+  const save: Store['save'] = async (key, change, action) => {
+    const result = commit(key, change, action, true);
+    if (!result.ok)
+      return { ok: false, message: result.message, fieldErrors: {} };
+    try {
+      await result.synced;
+      return { ok: true };
+    } catch (cause) {
+      return {
+        ok: false,
+        message: apiErrorMessage(cause),
+        fieldErrors: apiFieldErrors(cause),
+      };
     }
   };
   return (
-    <Context.Provider value={{ state, update, error }}>
+    <Context.Provider value={{ state, update, save, error }}>
       {children}
     </Context.Provider>
   );

@@ -16,21 +16,45 @@ import {
   yearLevelOptions,
 } from '@/data/mock-data';
 import { studentSchema } from '@/data/schema';
-import { initials, today } from '@/lib/domain';
+import { initials, normalize, today } from '@/lib/domain';
+import {
+  clean,
+  email,
+  lengthBetween,
+  onlyErrors,
+  pastDate,
+  personName,
+  phone,
+  required,
+  studentId,
+  type FieldErrors,
+} from '@/lib/validation';
 import type { Student } from '@/types';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-type FieldErrors = Partial<Record<keyof Student, string>>;
-// Inline messages shown under each field (the schema still validates on save).
-function validateStudent(form: Student, labels: Record<string, string>) {
-  const errors: FieldErrors = {};
-  for (const [key, label] of Object.entries(labels))
-    if (!String(form[key as keyof Student] ?? '').trim())
-      errors[key as keyof Student] = `${label} is required.`;
-  if (!errors.email && !EMAIL.test(form.email.trim()))
-    errors.email = 'Enter a valid email address, e.g. name@school.edu.';
+// Inline messages shown under each field. The API enforces the same rules.
+function validateStudent(form: Student, others: Student[]): FieldErrors {
+  const errors = onlyErrors({
+    studentId: studentId(form.studentId),
+    fullName: personName(form.fullName, 'Full name', 100),
+    email: email(form.email),
+    contactNumber: phone(form.contactNumber, 'Contact number', { allowPlaceholder: true }),
+    address: lengthBetween(form.address, 'Address', 5, 300),
+    emergencyContact: personName(form.emergencyContact, 'Emergency contact', 100),
+    emergencyContactNumber: phone(form.emergencyContactNumber, 'Emergency contact number', {
+      allowPlaceholder: true,
+    }),
+    dateEnrolled: pastDate(form.dateEnrolled, 'Date enrolled', today()),
+    program: required(form.program, 'Program'),
+    yearLevel: required(form.yearLevel, 'Year level'),
+    section: required(form.section, 'Section'),
+    academicStatus: required(form.academicStatus, 'Status'),
+  });
+  if (!errors.studentId && others.some((s) => normalize(s.studentId) === normalize(form.studentId)))
+    errors.studentId = 'Student ID is already in use.';
+  if (!errors.email && others.some((s) => normalize(s.email) === normalize(form.email)))
+    errors.email = 'Email is already registered.';
   return errors;
 }
 
@@ -41,7 +65,7 @@ export function StudentForm({
   student: Student | null;
   onClose: () => void;
 }) {
-  const [, setStudents] = useAdminCollection('students');
+  const [students, , saveStudents] = useAdminCollection('students');
   const [form, setForm] = useState<Student>(
     () =>
       student ?? {
@@ -63,7 +87,11 @@ export function StudentForm({
   );
   const [error, setError] = useState('');
   const [submitted, setSubmitted] = useState(false);
-  const update = (key: keyof Student, value: string) =>
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [serverErrors, setServerErrors] = useState<FieldErrors>({});
+  const [saving, setSaving] = useState(false);
+  const update = (key: keyof Student, value: string) => {
+    setServerErrors((prev) => ({ ...prev, [key]: '' }));
     setForm((prev) => ({
       ...prev,
       [key]: value,
@@ -79,24 +107,24 @@ export function StudentForm({
         : {}),
       ...(key === 'program' || key === 'yearLevel' ? { section: '' } : {}),
     }));
-  const fields = [
-    ['studentId', 'Student ID', 'text'],
-    ['fullName', 'Full name', 'text'],
-    ['email', 'Email', 'email'],
-    ['contactNumber', 'Contact number', 'tel'],
-    ['address', 'Address', 'text'],
-    ['emergencyContact', 'Emergency contact', 'text'],
-    ['emergencyContactNumber', 'Emergency contact number', 'tel'],
-    ['dateEnrolled', 'Date enrolled', 'date'],
-  ] as const;
-  const labels: Record<string, string> = {
-    ...Object.fromEntries(fields.map(([key, label]) => [key, label])),
-    program: 'Program',
-    yearLevel: 'Year level',
-    section: 'Section',
-    academicStatus: 'Status',
   };
-  const fieldErrors = submitted ? validateStudent(form, labels) : {};
+  const fields = [
+    ['studentId', 'Student ID', 'text', 'e.g. 2024-00115', 10],
+    ['fullName', 'Full name', 'text', 'e.g. Ma. Clara Peñaflor', 100],
+    ['email', 'Email', 'email', 'e.g. name@school.edu', 254],
+    ['contactNumber', 'Contact number', 'tel', 'e.g. 0917 123 4567', 30],
+    ['address', 'Address', 'text', '', 300],
+    ['emergencyContact', 'Emergency contact', 'text', '', 100],
+    ['emergencyContactNumber', 'Emergency contact number', 'tel', 'e.g. 0917 123 4567', 30],
+    ['dateEnrolled', 'Date enrolled', 'date', '', 10],
+  ] as const;
+  const others = students.filter((s) => s.id !== form.id);
+  const allErrors = { ...validateStudent(form, others), ...onlyErrors(serverErrors) };
+  // A field shows its message once it was left (blur) or the form was submitted.
+  const fieldErrors: FieldErrors = Object.fromEntries(
+    Object.entries(allErrors).filter(([key]) => submitted || touched[key])
+  );
+  const blur = (key: string) => setTouched((prev) => ({ ...prev, [key]: true }));
   const errorProps = (key: keyof Student) =>
     fieldErrors[key]
       ? { 'aria-invalid': true, 'aria-describedby': `student-${key}-error` }
@@ -107,8 +135,45 @@ export function StudentForm({
         {fieldErrors[key]}
       </p>
     );
+  const submit = async () => {
+    if (saving) return; // no double submits
+    setSubmitted(true);
+    setError('');
+    if (Object.keys(allErrors).length) return;
+    const result = studentSchema.safeParse({
+      ...form,
+      studentId: clean(form.studentId),
+      fullName: clean(form.fullName),
+      email: form.email.trim().toLowerCase(),
+      contactNumber: clean(form.contactNumber),
+      address: clean(form.address),
+      emergencyContact: clean(form.emergencyContact),
+      emergencyContactNumber: clean(form.emergencyContactNumber),
+      avatarInitials: initials(form.fullName),
+    });
+    if (!result.success) {
+      setError(result.error.issues[0].message);
+      return;
+    }
+    setSaving(true);
+    const saved = await saveStudents(
+      (prev) =>
+        student
+          ? prev.map((s) => (s.id === student.id ? result.data : s))
+          : [...prev, result.data],
+      `${student ? 'Updated' : 'Added'} student ${result.data.fullName}`
+    );
+    setSaving(false);
+    if (saved.ok) {
+      toast.success('Student saved');
+      onClose();
+      return;
+    }
+    setServerErrors(saved.fieldErrors);
+    if (!Object.keys(saved.fieldErrors).length) setError(saved.message);
+  };
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
+    <Dialog open onOpenChange={(open) => !open && !saving && onClose()}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{student ? 'Edit Student' : 'Add Student'}</DialogTitle>
@@ -121,29 +186,7 @@ export function StudentForm({
           noValidate
           onSubmit={(event) => {
             event.preventDefault();
-            setSubmitted(true);
-            setError('');
-            if (Object.keys(validateStudent(form, labels)).length) return;
-            const result = studentSchema.safeParse({
-              ...form,
-              avatarInitials: initials(form.fullName),
-            });
-            if (!result.success) {
-              setError(result.error.issues[0].message);
-              return;
-            }
-            if (
-              setStudents(
-                (prev) =>
-                  student
-                    ? prev.map((s) => (s.id === student.id ? result.data : s))
-                    : [...prev, result.data],
-                `${student ? 'Updated' : 'Added'} student ${result.data.fullName}`
-              )
-            ) {
-              toast.success('Student saved');
-              onClose();
-            }
+            void submit();
           }}
           className="space-y-4"
         >
@@ -153,7 +196,7 @@ export function StudentForm({
             </p>
           )}
           <div className="grid gap-4 sm:grid-cols-2">
-            {fields.map(([key, label, type]) => (
+            {fields.map(([key, label, type, placeholder, maxLength]) => (
               <div className="space-y-2" key={key}>
                 <Label htmlFor={`student-${key}`}>{label}</Label>
                 <Input
@@ -161,7 +204,11 @@ export function StudentForm({
                   id={`student-${key}`}
                   type={type}
                   value={form[key]}
+                  placeholder={placeholder || undefined}
+                  maxLength={maxLength}
+                  max={key === 'dateEnrolled' ? today() : undefined}
                   onChange={(e) => update(key, e.target.value)}
+                  onBlur={() => blur(key)}
                   className={fieldErrors[key] ? 'border-destructive' : undefined}
                   {...errorProps(key)}
                 />
@@ -202,6 +249,7 @@ export function StudentForm({
                   className={`flex h-9 w-full rounded-md border bg-background px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring ${fieldErrors[key] ? 'border-destructive' : 'border-input'}`}
                   value={form[key]}
                   onChange={(e) => update(key, e.target.value)}
+                  onBlur={() => blur(key)}
                   {...errorProps(key)}
                 >
                   <option value="" disabled>
@@ -216,10 +264,12 @@ export function StudentForm({
             ))}
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
               Cancel
             </Button>
-            <Button type="submit">Save Student</Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? 'Saving…' : 'Save Student'}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
