@@ -15,7 +15,8 @@ import {
   strongPassword,
 } from '../services/validation';
 
-const inputClass = 'form-control bg-dark border-secondary text-white py-2';
+// Bootstrap's border utilities are !important, so errors swap the class.
+const inputClass = (invalid) => `form-control bg-dark ${invalid ? 'border-danger' : 'border-secondary'} text-white py-2`;
 const SENT_MESSAGE = 'If an account matches, we sent a code to its email.';
 
 // Forgot password for both tabs of the login page:
@@ -58,7 +59,6 @@ const ForgotPasswordPage = () => {
       [name]: name === 'identifier' ? identifierError() : resetErrors()[name] || '',
     }));
   const clearField = (name) => fieldErrors[name] && setFieldErrors((prev) => ({ ...prev, [name]: '' }));
-  const border = (name) => ({ borderColor: fieldErrors[name] ? '#ef4444' : undefined });
 
   // Runs one request at a time (no double submits).
   const once = async (work) => {
@@ -192,8 +192,7 @@ const ForgotPasswordPage = () => {
                     id="forgot-identifier"
                     type={role === 'student' ? 'text' : 'email'}
                     autoComplete="username"
-                    className={inputClass}
-                    style={border('identifier')}
+                    className={inputClass(fieldErrors.identifier)}
                     placeholder={role === 'student' ? 'e.g. juan.delacruz@edutrack.edu' : 'e.g. admin@edutrack.edu'}
                     value={identifier}
                     maxLength={254}
@@ -238,8 +237,8 @@ const ForgotPasswordPage = () => {
                     inputMode="numeric"
                     autoComplete="one-time-code"
                     maxLength={RESET_CODE_LENGTH}
-                    className={`${inputClass} text-center fs-4 font-monospace`}
-                    style={{ letterSpacing: '8px', ...border('code') }}
+                    className={`${inputClass(fieldErrors.code)} text-center fs-4 font-monospace`}
+                    style={{ letterSpacing: '8px' }}
                     placeholder="000000"
                     value={form.code}
                     onChange={(e) => {
@@ -263,8 +262,7 @@ const ForgotPasswordPage = () => {
                       id="reset-password"
                       type={showPassword ? 'text' : 'password'}
                       autoComplete="new-password"
-                      className={inputClass}
-                      style={border('password')}
+                      className={inputClass(fieldErrors.password)}
                       placeholder="Create a strong password"
                       value={form.password}
                       maxLength={128}
@@ -299,8 +297,7 @@ const ForgotPasswordPage = () => {
                     id="reset-confirm"
                     type={showPassword ? 'text' : 'password'}
                     autoComplete="new-password"
-                    className={inputClass}
-                    style={border('confirmPassword')}
+                    className={inputClass(fieldErrors.confirmPassword)}
                     placeholder="Re-enter the new password"
                     value={form.confirmPassword}
                     maxLength={128}

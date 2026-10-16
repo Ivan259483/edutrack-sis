@@ -48,7 +48,8 @@ const LoginPage = () => {
       password: values.password ? '' : 'Enter your password.',
     });
   const checkField = (name) => setFieldErrors((prev) => ({ ...prev, [name]: validate()[name] || '' }));
-  const fieldBorder = (name) => (fieldErrors[name] ? '#ef4444' : undefined);
+  // Bootstrap's border utilities are !important, so swap the class instead of styling.
+  const borderClass = (name) => (fieldErrors[name] ? 'border-danger' : 'border-secondary');
 
   // If already logged in, redirect immediately to the student portal
   useEffect(() => {
@@ -186,7 +187,7 @@ const LoginPage = () => {
                   id="login-identifier"
                   type={role === 'student' ? 'text' : 'email'}
                   autoComplete="username"
-                  className="form-control bg-dark border-secondary text-white py-2"
+                  className={`form-control bg-dark ${borderClass('identifier')} text-white py-2`}
                   placeholder={role === 'student' ? 'e.g. juan.delacruz@edutrack.edu' : 'e.g. admin@edutrack.edu'}
                   value={email}
                   onChange={(e) => {
@@ -194,7 +195,6 @@ const LoginPage = () => {
                     if (fieldErrors.identifier) setFieldErrors((prev) => ({ ...prev, identifier: '' }));
                   }}
                   onBlur={() => checkField('identifier')}
-                  style={{ borderColor: fieldBorder('identifier') }}
                   aria-invalid={Boolean(fieldErrors.identifier)}
                   aria-describedby={fieldErrors.identifier ? 'login-identifier-error' : undefined}
                   maxLength={254}
@@ -211,7 +211,7 @@ const LoginPage = () => {
                     id="login-password"
                     type={showPassword ? 'text' : 'password'}
                     autoComplete="current-password"
-                    className="form-control bg-dark border-secondary text-white py-2"
+                    className={`form-control bg-dark ${borderClass('password')} text-white py-2`}
                     placeholder="Enter password"
                     value={password}
                     onChange={(e) => {
@@ -219,7 +219,6 @@ const LoginPage = () => {
                       if (fieldErrors.password) setFieldErrors((prev) => ({ ...prev, password: '' }));
                     }}
                     onBlur={() => checkField('password')}
-                    style={{ borderColor: fieldBorder('password') }}
                     aria-invalid={Boolean(fieldErrors.password)}
                     aria-describedby={fieldErrors.password ? 'login-password-error' : undefined}
                     maxLength={128}

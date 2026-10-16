@@ -471,8 +471,8 @@ const RegisterPage = () => {
                     inputMode="numeric"
                     autoComplete="one-time-code"
                     maxLength={REGISTRATION_CODE_LENGTH}
-                    className="form-control bg-dark border-secondary text-white text-center fs-3 font-monospace py-2"
-                    style={{ letterSpacing: '8px', borderColor: otpTouched && otpError ? '#ef4444' : undefined }}
+                    className={`form-control bg-dark ${otpTouched && otpError ? 'border-danger' : 'border-secondary'} text-white text-center fs-3 font-monospace py-2`}
+                    style={{ letterSpacing: '8px' }}
                     placeholder={'0'.repeat(REGISTRATION_CODE_LENGTH)}
                     value={enteredOtp}
                     onChange={(e) => {

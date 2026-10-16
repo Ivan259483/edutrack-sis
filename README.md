@@ -121,7 +121,15 @@ appear in development (`npm run dev`).
 ## Features (course requirements)
 
 - **User management** — registration with emailed 5-digit verification code, login with email or
-  student ID, logout, change password, bcrypt-hashed passwords, JWT (24 h) authentication.
+  student ID, logout, change password, **Forgot password** (6-digit code by email, both login tabs),
+  bcrypt-hashed passwords, JWT (24 h) authentication; resetting or changing a password signs out
+  older sessions.
+- **Validation** — every form checks its fields on blur and on submit (red message under the field,
+  trimmed input, no double submits) and the API enforces the same rules, returning
+  `{ message, errors: [{ field, message }] }` (e.g. "Email is already registered."). Names: 2–50
+  letters incl. ñ/accents, spaces, `-`, `'`, `.`; passwords (register/reset/change): 8+ characters with
+  upper and lower case, a number and a symbol; student IDs `YYYY-NNNNN`; phones, dates, grades
+  (1.00–5.00), units, rooms and times have their own rules. Login only requires both fields.
 - **Dashboards & profile** — student dashboard (GPA, units, today's classes, recent grades), student
   profile page, admin dashboard and admin profile.
 - **CRUD** — students, enrollments, grades, class schedules, announcements, support tickets, subjects
@@ -133,8 +141,9 @@ appear in development (`npm run dev`).
 - **Security** — `protect`/`authorize` JWT middleware, role-based access (admin vs student), students
   can only access their own records, express-validator input validation and whitelisting (no mass
   assignment), NoSQL-injection sanitizing, helmet security headers, CORS restricted to the two
-  portals, rate limiting on login/registration/OTP, hashed and attempt-limited OTP codes, generic
-  login errors (no account enumeration), errors never leak stack traces.
+  portals, rate limiting on login/registration/OTP, 5 wrong passwords lock an account for 15 minutes,
+  hashed and attempt-limited OTP and reset codes (counters kept in MongoDB, safe on serverless),
+  generic login and reset answers (no account enumeration), errors never leak stack traces.
 - **UI** — responsive layouts, navigation menus, search (students, subjects, global admin search),
   filters and pagination (admin directory; `?page=&limit=&search=` on every list endpoint).
 
@@ -147,7 +156,9 @@ All routes are under `/api`. 🔒 = requires `Authorization: Bearer <token>`.
 | `POST /auth/send-otp`, `POST /auth/verify-otp` | public | email verification code |
 | `POST /auth/register` | public (verified email) | create a student account |
 | `POST /auth/login` | public | get a JWT |
-| `GET /auth/me`, `PUT /auth/password` | 🔒 any | current user, change password |
+| `POST /auth/forgot-password` | public | email a 6-digit reset code (`{ identifier, role }`; same answer for unknown accounts, one per minute) |
+| `POST /auth/reset-password` | public | `{ identifier, code, password, confirmPassword }`; code valid 15 min, 5 tries |
+| `GET /auth/me`, `PUT /auth/password` | 🔒 any | current user, change password (returns a fresh token) |
 | `GET /settings`, `GET /subjects` | 🔒 any | academic period & switches, subject catalog |
 | `PUT /settings` | 🔒 admin | update settings |
 | `GET /admin/bootstrap` | 🔒 admin | all admin portal data in one request |
@@ -196,8 +207,10 @@ the project's last successful deployment (it builds whenever that can't be deter
 
 ## Notes & limitations
 
-- Verification emails use Gmail SMTP (`EMAIL_USER`/`EMAIL_PASS` App Password). If they are empty or
-  sending fails in development, the code is printed in the backend console.
-- There is no self-service password reset yet: signed-in users change their password on their
-  profile (students) or in the admin Profile dialog, and the registrar can help with a forgotten one.
+- Verification and password reset emails use Gmail SMTP (`EMAIL_USER`/`EMAIL_PASS` App Password).
+  If they are empty or sending fails in development, the code is printed in the backend console.
+  For local testing with real credentials, `EMAIL_ALLOWLIST` (comma-separated) limits real email to
+  those addresses; leave it empty on Vercel.
+- Registration codes stay 5 digits because the Flutter app (same live API) expects 5; reset codes
+  are 6 digits.
 - Seeded passwords are for local demos only; change them before any real use.
