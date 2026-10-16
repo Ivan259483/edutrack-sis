@@ -69,9 +69,21 @@ const allowed = (to) => {
   return !list.length || list.includes(to.toLowerCase());
 };
 
+// The seeded demo accounts use these domains, whose inboxes nobody on the team
+// owns: never email them (real users register with their own addresses).
+export const DEMO_EMAIL_DOMAINS = ['edutrack.edu', 'university.edu'];
+export const isDemoAddress = (to) => DEMO_EMAIL_DOMAINS.includes(String(to).split('@').pop().toLowerCase());
+// Codes may be printed only on a local machine, never in Vercel's logs.
+const local = () => !process.env.VERCEL && process.env.NODE_ENV !== 'production';
+
 // Delivery is an object method so tests can replace it (mock.method(mailer, 'deliver')).
 export const mailer = {
   async deliver({ to, subject, text, html, devLog }) {
+    if (isDemoAddress(to)) {
+      console.warn(`[EMAIL SKIPPED] ${to} is a demo address; "${subject}" was not sent.`);
+      if (local()) console.log(`[SMTP DEV LOG] Recipient: ${to} | ${devLog}`);
+      return { success: true, simulated: true, skipped: true };
+    }
     const emailUser = process.env.EMAIL_USER;
     const emailPass = process.env.EMAIL_PASS;
     if (!emailUser || !emailPass || !allowed(to)) {

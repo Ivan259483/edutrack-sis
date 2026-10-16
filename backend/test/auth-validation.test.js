@@ -358,6 +358,30 @@ describe('per-email code limits', () => {
   });
 });
 
+describe('email sender', () => {
+  it('never emails the seeded demo domains, but still emails real addresses', async () => {
+    mock.restoreAll(); // use the real sender
+    const { DEMO_EMAIL_DOMAINS, isDemoAddress } = await import('../utils/sendEmail.js');
+    assert.deepEqual(DEMO_EMAIL_DOMAINS, ['edutrack.edu', 'university.edu']);
+    assert.ok(isDemoAddress('Juan.DelaCruz@EduTrack.edu'));
+    assert.ok(isDemoAddress('pedro.santos@university.edu'));
+    assert.ok(!isDemoAddress('someone@gmail.com'));
+    // With (fake) credentials set, a demo address must be skipped before any SMTP call.
+    Object.assign(process.env, { EMAIL_USER: 'sender@example.com', EMAIL_PASS: 'not-a-real-password' });
+    const logs = mock.method(console, 'log', () => {});
+    const warns = mock.method(console, 'warn', () => {});
+    try {
+      const result = await mailer.deliver({ to: 'admin@edutrack.edu', subject: 'S', text: 'T', html: 'H', devLog: 'code' });
+      assert.deepEqual(result, { success: true, simulated: true, skipped: true });
+      assert.match(String(warns.mock.calls[0].arguments[0]), /\[EMAIL SKIPPED\] admin@edutrack.edu is a demo address/);
+    } finally {
+      Object.assign(process.env, { EMAIL_USER: '', EMAIL_PASS: '' });
+      logs.mock.restore();
+      warns.mock.restore();
+    }
+  });
+});
+
 describe('change password', () => {
   it('returns a fresh token and signs out older sessions', async () => {
     const oldToken = (await login('2024-00108', 'Student123!', 'student')).body.token;

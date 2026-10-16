@@ -214,6 +214,9 @@ the project's last successful deployment (it builds whenever that can't be deter
   If they are empty or sending fails in development, the code is printed in the backend console.
   For local testing with real credentials, `EMAIL_ALLOWLIST` (comma-separated) limits real email to
   those addresses; leave it empty on Vercel.
+- Emails are never sent to the seeded demo domains (`@edutrack.edu`, `@university.edu`): the
+  attempt is logged instead (locally with the code, on Vercel without it). Real users register and
+  reset with their own addresses.
 - Registration codes stay 5 digits because the Flutter app (same live API) expects 5; reset codes
   are 6 digits.
 - Seeded passwords are for local demos only; change them before any real use.
