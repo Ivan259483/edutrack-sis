@@ -9,21 +9,45 @@ import { asyncHandler, HttpError } from '../middleware/error.js';
 import generateToken from '../utils/generateToken.js';
 import { sendPasswordResetEmail, sendVerificationEmail } from '../utils/sendEmail.js';
 import { initials, today } from '../utils/rules.js';
-import { clearThrottle, cooldown, lockedFor, recordFailure } from '../utils/throttle.js';
+import { clearThrottle, cooldown, lockedFor, quota, recordFailure, waitText } from '../utils/throttle.js';
 import { REGISTRATION_CODE_LENGTH, RESET_CODE_LENGTH } from '../validators/index.js';
 
 const OTP_LIFETIME_MS = 5 * 60 * 1000;
 const MAX_OTP_ATTEMPTS = 5;
 
-// Sign-in: 5 wrong passwords within 15 minutes lock that account (or unknown
-// identifier, so the lock reveals nothing) for 15 minutes.
-const LOGIN_LIMIT = { limit: 5, windowMs: 15 * 60 * 1000, lockMs: 15 * 60 * 1000 };
-const INVALID_LOGIN = 'Invalid email/Student ID or password.';
+// Limits count mainly per account/email (stored in MongoDB), so a whole class
+// on one Wi-Fi network is not blocked by one person; routes/authRoutes.js adds
+// a looser per-IP limit on top.
 
-// Forgot password: one active code per account, valid 15 minutes, 5 wrong
-// tries, a new code at most once a minute.
-const RESET_CODE_MINUTES = 15;
+// Sign-in: 5 wrong passwords within 15 minutes lock that account (or unknown
+// identifier, so the lock reveals nothing) for 5 minutes.
+const LOGIN_LIMIT = { limit: 5, windowMs: 15 * 60 * 1000, lockMs: 5 * 60 * 1000 };
+const INVALID_LOGIN = 'Invalid email/Student ID or password.';
+const loginLocked = (ms) =>
+  `Too many failed sign-in attempts. Please wait ${waitText(ms)} before trying again, or reset your password.`;
+
+// Emailed codes (registration and forgot password): at most one a minute and
+// 5 an hour per email address.
 const RESEND_COOLDOWN_MS = 60 * 1000;
+const HOURLY_CODES = { limit: 5, windowMs: 60 * 60 * 1000 };
+// `retryAfter` (seconds) lets the pages count down to the next try.
+const limited = (message, ms) => Object.assign(new HttpError(429, message), { retryAfter: Math.ceil(ms / 1000) });
+const tooSoon = (ms) => limited(`Please wait ${waitText(ms)} before requesting another code.`, ms);
+const tooManyCodes = (ms) =>
+  limited(
+    `You have requested ${HOURLY_CODES.limit} codes in the last hour. Please wait ${waitText(ms)} before requesting another code.`,
+    ms
+  );
+// Checks both limits for one address; throws the right message when either is hit.
+const allowCode = async (scope, key) => {
+  const wait = await cooldown(`${scope}-request:${key}`, RESEND_COOLDOWN_MS);
+  if (wait) throw tooSoon(wait);
+  const hourly = await quota(`${scope}-hourly:${key}`, HOURLY_CODES);
+  if (hourly) throw tooManyCodes(hourly);
+};
+
+// Forgot password: one active code per account, valid 15 minutes, 5 wrong tries.
+const RESET_CODE_MINUTES = 15;
 const RESET_LIMIT = { limit: 5, windowMs: RESET_CODE_MINUTES * 60 * 1000, lockMs: RESET_CODE_MINUTES * 60 * 1000 };
 const RESET_SENT = 'If an account matches, we sent a code to its email.';
 const INVALID_RESET_CODE = 'The code is incorrect or has expired. Check your latest email or request a new code.';
@@ -48,10 +72,6 @@ const findByIdentifier = (identifier) =>
   User.findOne({ $or: [{ email: identifier.toLowerCase() }, { studentId: identifier }] }).collation(caseInsensitive);
 const emailTaken = (email) => User.exists({ email }).collation(caseInsensitive);
 
-const minutesLeft = (ms) => {
-  const minutes = Math.ceil(ms / 60000);
-  return `${minutes} minute${minutes === 1 ? '' : 's'}`;
-};
 // Only an HMAC of a reset code is stored, so a database leak can't be brute-forced offline.
 const hashResetCode = (userId, code) =>
   createHmac('sha256', process.env.JWT_SECRET).update(`password-reset:${userId}:${code}`).digest('hex');
@@ -67,6 +87,7 @@ export const sendOtp = asyncHandler(async (req, res) => {
       email: 'Email is already registered. Please sign in instead.',
     });
   }
+  await allowCode('otp', email);
   // Cryptographically secure code; only its hash is stored.
   const otp = String(randomInt(10 ** (REGISTRATION_CODE_LENGTH - 1), 10 ** REGISTRATION_CODE_LENGTH));
   await Otp.findOneAndUpdate(
@@ -190,21 +211,11 @@ export const loginUser = asyncHandler(async (req, res) => {
 
   const throttleKey = `login:${user ? user.id : identifier.toLowerCase()}`;
   const locked = await lockedFor(throttleKey);
-  if (locked) {
-    throw new HttpError(
-      429,
-      `Too many failed sign-in attempts. Try again in ${minutesLeft(locked)}, or reset your password.`
-    );
-  }
+  if (locked) throw limited(loginLocked(locked), locked);
   // Same message for unknown user and wrong password (no account enumeration).
   if (!user || !(await user.matchPassword(password))) {
     const left = await recordFailure(throttleKey, LOGIN_LIMIT);
-    if (!left) {
-      throw new HttpError(
-        429,
-        `Too many failed sign-in attempts. Try again in ${minutesLeft(LOGIN_LIMIT.lockMs)}, or reset your password.`
-      );
-    }
+    if (!left) throw limited(loginLocked(LOGIN_LIMIT.lockMs), LOGIN_LIMIT.lockMs);
     throw new HttpError(401, INVALID_LOGIN);
   }
   await clearThrottle(throttleKey);
@@ -254,22 +265,21 @@ export const changePassword = asyncHandler(async (req, res) => {
 export const forgotPassword = asyncHandler(async (req, res) => {
   const { identifier, role } = req.body;
   const key = identifier.toLowerCase();
-  // The cooldown is per identifier typed, for existing and unknown accounts alike.
-  const wait = await cooldown(`reset-request:${key}`, RESEND_COOLDOWN_MS);
-  if (wait) {
-    const seconds = Math.ceil(wait / 1000);
-    return res
-      .status(429)
-      .json({ message: `Please wait ${seconds} seconds before requesting another code.`, retryAfter: seconds });
-  }
+  // Limits apply to the identifier typed, for existing and unknown accounts
+  // alike, so hitting one reveals nothing.
+  await allowCode('reset', key);
   // A new code means a fresh set of tries.
   await clearThrottle(`reset-verify:${key}`);
 
   const user = await findByIdentifier(identifier);
   if (user && (!role || user.role === role)) {
     const existing = await PasswordReset.findOne({ user: user._id });
-    // Also one code per minute per account (it can be named by email or student ID).
-    if (!existing || Date.now() - existing.sentAt.getTime() >= RESEND_COOLDOWN_MS) {
+    // The same limits per account too (it can be named by email or by student
+    // ID); these are silent, so the answer stays the same.
+    const accountAllowed =
+      (!existing || Date.now() - existing.sentAt.getTime() >= RESEND_COOLDOWN_MS) &&
+      !(await quota(`reset-hourly:account:${user.id}`, HOURLY_CODES));
+    if (accountAllowed) {
       const code = String(randomInt(0, 10 ** RESET_CODE_LENGTH)).padStart(RESET_CODE_LENGTH, '0');
       await PasswordReset.findOneAndUpdate(
         { user: user._id },

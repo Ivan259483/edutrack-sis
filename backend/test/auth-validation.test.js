@@ -21,6 +21,7 @@ const { seedDatabase } = await import('../config/seed.js');
 const { mailer } = await import('../utils/sendEmail.js');
 const { default: AuthThrottle } = await import('../models/AuthThrottle.js');
 const { default: PasswordReset } = await import('../models/PasswordReset.js');
+const { waitText } = await import('../utils/throttle.js');
 
 let server;
 let base;
@@ -50,7 +51,7 @@ beforeEach(() => {
 afterEach(() => mock.restoreAll());
 const lastCode = () => sent.at(-1)?.text.match(/code is: (\d+)/)?.[1];
 // Lets a test skip the one-minute resend cooldown.
-const skipCooldowns = () => AuthThrottle.deleteMany({ _id: /^reset-request:/ });
+const skipCooldowns = () => AuthThrottle.deleteMany({ _id: /^(reset|otp)-request:/ });
 
 before(async () => {
   await mongoose.connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: 5000 });
@@ -181,7 +182,7 @@ describe('sign-in', () => {
     assert.equal((await login('ADMIN@EduTrack.edu', 'Admin123!', 'admin')).status, 200);
   });
 
-  it('locks an account for 15 minutes after 5 wrong passwords, without revealing whether it exists', async () => {
+  it('locks an account for 5 minutes after 5 wrong passwords, without revealing whether it exists', async () => {
     for (const identifier of ['maria.reyes@university.edu', 'nobody@example.com']) {
       for (let i = 1; i <= 4; i++) {
         const res = await login(identifier, 'wrong-password');
@@ -190,7 +191,11 @@ describe('sign-in', () => {
       }
       const fifth = await login(identifier, 'wrong-password');
       assert.equal(fifth.status, 429);
-      assert.match(fifth.body.message, /Too many failed sign-in attempts. Try again in 15 minutes/);
+      assert.equal(
+        fifth.body.message,
+        'Too many failed sign-in attempts. Please wait 5 minutes before trying again, or reset your password.'
+      );
+      assert.equal(fifth.body.retryAfter, 300);
     }
     // Even the right password is refused while locked.
     assert.equal((await login('maria.reyes@university.edu', 'Student123!')).status, 429);
@@ -308,6 +313,48 @@ describe('forgot password', () => {
     await forgot('maria.reyes@university.edu', 'student');
     assert.equal((await attempt(lastCode())).status, 200);
     assert.equal((await login('maria.reyes@university.edu', newPassword)).status, 200);
+  });
+});
+
+describe('per-email code limits', () => {
+  it('says how long to wait, in seconds or minutes', () => {
+    assert.equal(waitText(1000), '1 second');
+    assert.equal(waitText(42_000), '42 seconds');
+    assert.equal(waitText(61_000), '2 minutes');
+    assert.equal(waitText(3 * 60_000), '3 minutes');
+  });
+
+  it('allows 5 reset codes an hour per email, for existing and unknown accounts alike', async () => {
+    for (const identifier of ['hannah.ong@university.edu', 'ghost.hourly@example.com']) {
+      for (let i = 1; i <= 5; i++) {
+        await skipCooldowns();
+        assert.equal((await call('POST', '/auth/forgot-password', { body: { identifier } })).status, 200);
+      }
+      await skipCooldowns();
+      const sixth = await call('POST', '/auth/forgot-password', { body: { identifier } });
+      assert.equal(sixth.status, 429);
+      assert.match(
+        sixth.body.message,
+        /^You have requested 5 codes in the last hour\. Please wait (60|59) minutes before requesting another code\.$/
+      );
+      assert.ok(sixth.body.retryAfter > 3500);
+    }
+    // Another student on the same network is not affected.
+    await skipCooldowns();
+    assert.equal(
+      (await call('POST', '/auth/forgot-password', { body: { identifier: 'ryan.gomez@university.edu' } })).status,
+      200
+    );
+  });
+
+  it('applies the 60-second cooldown to registration codes too', async () => {
+    const email = 'cooldown.check@example.com';
+    assert.equal((await call('POST', '/auth/send-otp', { body: { email } })).status, 200);
+    const again = await call('POST', '/auth/send-otp', { body: { email } });
+    assert.equal(again.status, 429);
+    assert.match(again.body.message, /^Please wait \d+ seconds before requesting another code\.$/);
+    assert.ok(again.body.retryAfter > 0 && again.body.retryAfter <= 60);
+    assert.equal(sent.length, 1);
   });
 });
 

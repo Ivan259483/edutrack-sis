@@ -35,6 +35,8 @@ export const errorHandler = (err, req, res, _next) => {
     return res.status(err.status).json({
       message: err.message,
       ...(err.errors ? { errors: fieldErrors(err.errors) } : {}),
+      // Seconds until a rate-limited request may be retried.
+      ...(err.retryAfter ? { retryAfter: err.retryAfter } : {}),
     });
   }
   if (err.name === 'ValidationError') {

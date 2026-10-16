@@ -112,6 +112,9 @@ const RegisterPage = () => {
 
   // Shows API field errors under their fields (back on step 1 if they belong there).
   const showApiError = (err, fallback) => {
+    // Rate limits say how long to wait; count the resend button down from it.
+    const retryAfter = err.response?.data?.retryAfter;
+    if (retryAfter) setResendCooldown(retryAfter);
     const fieldErrors = apiFieldErrors(err);
     if (!Object.keys(fieldErrors).length) {
       setServerError(errorMessage(err, fallback));

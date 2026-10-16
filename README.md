@@ -141,8 +141,11 @@ appear in development (`npm run dev`).
 - **Security** — `protect`/`authorize` JWT middleware, role-based access (admin vs student), students
   can only access their own records, express-validator input validation and whitelisting (no mass
   assignment), NoSQL-injection sanitizing, helmet security headers, CORS restricted to the two
-  portals, rate limiting on login/registration/OTP, 5 wrong passwords lock an account for 15 minutes,
-  hashed and attempt-limited OTP and reset codes (counters kept in MongoDB, safe on serverless),
+  portals, limits counted mainly per account/email (kept in MongoDB, safe on serverless): 5 wrong
+  passwords lock that account for 5 minutes; emailed codes at most once a minute and 5 an hour per
+  email; plus a looser per-IP net (30 per 15 minutes; sign-in/code checks count only failures, so a
+  class on one Wi-Fi isn't blocked; `AUTH_RATE_LIMIT` raises it). Limit messages say how long to wait.
+  Hashed and attempt-limited OTP and reset codes,
   generic login and reset answers (no account enumeration), errors never leak stack traces.
 - **UI** — responsive layouts, navigation menus, search (students, subjects, global admin search),
   filters and pagination (admin directory; `?page=&limit=&search=` on every list endpoint).
