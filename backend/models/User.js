@@ -35,6 +35,12 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
+    // Stamped into every JWT. Bumping it (password reset/change) signs out
+    // every existing session; older tokens without it count as version 0.
+    tokenVersion: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: true, // Automatically manages createdAt and updatedAt

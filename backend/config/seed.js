@@ -2,10 +2,12 @@
 import { readFileSync } from 'node:fs';
 import ActivityLog from '../models/ActivityLog.js';
 import Announcement from '../models/Announcement.js';
+import AuthThrottle from '../models/AuthThrottle.js';
 import Enrollment from '../models/Enrollment.js';
 import Grade from '../models/Grade.js';
 import Notification from '../models/Notification.js';
 import Otp from '../models/Otp.js';
+import PasswordReset from '../models/PasswordReset.js';
 import Schedule from '../models/Schedule.js';
 import Setting from '../models/Setting.js';
 import Student from '../models/Student.js';
@@ -86,9 +88,10 @@ const notifications = data.notifications.map((n) => {
 
 export const seedDatabase = async ({ log = console.log } = {}) => {
   await Promise.all(
-    [User, Student, Subject, Enrollment, Grade, Schedule, Announcement, Ticket, Notification, ActivityLog, Setting, Otp].map(
-      (Model) => Model.deleteMany({})
-    )
+    [
+      User, Student, Subject, Enrollment, Grade, Schedule, Announcement, Ticket, Notification, ActivityLog, Setting,
+      Otp, PasswordReset, AuthThrottle,
+    ].map((Model) => Model.deleteMany({}))
   );
   log('🧹 Existing records cleared...');
 
